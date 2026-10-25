@@ -2,13 +2,45 @@
 
 Independent, experimental modular-mech construction workspace. The original M3CH4 game and its saves are unaffected.
 
+## Stage 17 — One constructor, one test yard (current default)
+
+**Open https://lowlevelwizards.github.io/M3CH4Ex/** to use the integrated Constructor Yard.
+The original detailed serial-owned mechanical laboratory remains accessible at
+[`detailed-lab.html`](./detailed-lab.html). The Part Audit and ten references
+remain tabs within the same yard garage.
+
+- Build, paint and fit the full Graybox experimental rig **in the garage**, with the
+  actual assembled model visible in the same outdoor test world.
+- **DEPLOY THIS EXACT MECH** switches that very Three.js assembly object from
+  garage inspection to the local driving simulation. Nothing is substituted with
+  a legacy game part. This includes Bubble, Stubber, Crawler, custom armor,
+  manipulators, foot kits, paint and other Graybox experimental pieces.
+- Control using WASD / Q-E / arrows, mouse/touch aim drag, Space or FIRE, and a
+  left thumb-stick on phones. There is a chase/forward camera switch, actual
+  solid obstacle collision, a simple installed-family mobility speed/turn
+  profile and three shootable steel target dummies with reset controls.
+- For Yardwalker, Kestrel and Hauler the live-authored hip, knee and ankle
+  group pivots move with the pilot. This is **visual gait articulation**, not
+  force/torque-driven walking, planted-foot contact solving or dynamic balance.
+  Experimental Stubber and Crawler currently move as unarticulated rigid
+  prototypes, retaining their actual experimental geometry.
+- **GARAGE / BUILD** returns to the same mech and construction state without
+  changing your existing `m3ch4-graybox-v1` blueprint. No career saves are
+  read or written, and no production M3CH4 repository is required.
+
+This is a first **in-place pilotable physical-fit loop**, not a completed import
+of the live game's complete damage, projectile, sound, networking or cockpit
+systems. The range targets currently use sandbox ray hits, and narrow-phase
+joint collision, weapon recoil, proper leg foot-contact and dynamic chassis
+response remain to be ported.
+
 ## Open on your phone
 
 GitHub Pages publishes the experimental `main` branch independently from the live game. Open:
 
 https://lowlevelwizards.github.io/M3CH4Ex/
 
-The root `index.html` is the white construction studio; it is not the combat game.
+The root `index.html` enters the integrated Constructor Yard. The earlier white-room mechanical studio is retained at `detailed-lab.html`.
 
 ## Current experimental scope
 
