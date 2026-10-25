@@ -102,6 +102,10 @@ for(const side of LEG_SIDES){
           contactStandard:'medium'
         }:section==='shin'?{
           kneeReceiver:[0,0,0],ankleReceiver:[...attach.position],
+          driveAnchors:{
+            utility:[layout.side*.07,-.23,.065],
+            travel:[layout.side*.07,-.275,.085]
+          },
           spanM:Math.hypot(...attach.position),
           nominalExtraReachM:variant==='extended'?PYLON_EXTENSION_M:0,
           upperStandard:'medium',lowerStandard:'medium'
@@ -110,8 +114,9 @@ for(const side of LEG_SIDES){
           acceptsRole:section==='hip'?'structural-link':section==='thigh'?'knee':
             section==='knee'?'structural-link':section==='shin'?'ankle':'foot',
           roleHint:'anatomy',normal:[0,1,0]},
-          ...(section==='thigh'?[{id:'drive-mount',position:[
-            layout.side*.155,-.104,.125],standard:'light',maxLoadKg:35,
+          ...(section==='thigh'?[{id:'drive-mount',
+            position:offset(layout.actuatorTop,layout.hip),
+            standard:'light',maxLoadKg:35,
             acceptsRole:DEVICE_TYPES.actuator,normal:[0,1,0],
             anchorId:'upper-drive',roleHint:'mechanism'
           }]:[]),
