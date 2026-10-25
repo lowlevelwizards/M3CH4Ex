@@ -1,7 +1,6 @@
-/** M3CH4 white-room construction laboratory. Entirely branch-local and isolated.
- * Stage 1–5: physical existing models, station swaps, graph inspection, exposed
- * socket positions and the existing real generator outrigger experiment.
- * NOT arbitrary joints, detached individual legs, universal sockets or combat.
+/** M3CH4 white-room construction laboratory. Stage 06:
+ * Real, individually owned Yardwalker legs, authored hip sockets and detach /
+ * reinstall operations. Shins, universal attachments and combat are deferred.
  */
 import * as THREE from 'three';
 import { CATALOG, BY_ID, SLOT_CENTERS, graphWorldPoses } from './components.js';
@@ -9,9 +8,10 @@ import { SHARED_PART_IDS, buildPartVisual } from './partVisuals.js';
 import { buildFitFixture } from './chassisFitVisuals.js';
 import { fitFixtureFor } from './chassisFitFixtures.js';
 import { rotatedY } from './assemblyGraph.js';
+import { extractYardwalkerLeg } from './yardwalkerVisual.js';
 import {
   createLabMachine, labInspection, labEquip, labSetGeneratorMount, labBlueprint,
-  loadLabBlueprint, labNodeList, LAB_SLOTS
+  loadLabBlueprint, labNodeList, labLegAction, labLegDetails, LAB_SLOTS
 } from './constructionLabCore.js';
 
 const $=id=>document.getElementById(id);
@@ -20,6 +20,7 @@ const status=$('verdict'), inspect=$('inspection'), stats=$('stats');
 const socketToggle=$('socket-toggle'), gridToggle=$('grid-toggle'),explode=$('explode');
 const slotLabels={structure:'FRAME',mobility:'MOBILITY',power:'POWER',command:'CAB',combat:'WEAPON'};
 let machine=createLabMachine(), selectedSlot='structure', selectedSerial=machine.installed.structure;
+let selectedSocket=null;
 let currentTab='catalog', isolate=false, rayTargets=[], sockets=[],partRoots=new Map(), nodeWorldPoses=new Map();
 const viewMap={quarter:[2.42,.22],front:[Math.PI,.08],side:[Math.PI/2,.10],top:[Math.PI,1.47]};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -68,7 +69,7 @@ function renderCatalog(){
     const entry=button('',()=>{
       const result=labEquip(machine,selectedSlot,def.id);
       if(!result.ok){setMessage(result.reason,true);return;}
-      selectedSerial=machine.installed[selectedSlot];
+      selectedSerial=machine.installed[selectedSlot];selectedSocket=null;
       rebuild(true);setMessage('Installed '+def.name);
     },'catalog-entry');
     if(def.id===installed)entry.classList.add('active');
@@ -83,7 +84,7 @@ function showTree(){
   tree.replaceChildren();
   labNodeList(machine).forEach(node=>{
     const row=button('',()=>{
-      selectedSerial=node.serial;refreshSelection();showTree();renderInspection();switchTab('inspect');
+      selectedSerial=node.serial;selectedSocket=null;refreshSelection();showTree();renderInspection();switchTab('inspect');
     },'tree-row tree-depth-'+Math.min(2,node.depth));
     row.setAttribute('aria-pressed',String(selectedSerial===node.serial));
     const content=document.createElement('span');content.className='tree-label';
@@ -92,6 +93,18 @@ function showTree(){
     sub.textContent=node.serial+(node.parentSocket?' · '+node.parentSocket:' · ROOT')+(node.virtual?' · ADAPTER':'');
     content.append(nm,sub);row.append(content);tree.append(row);
   });
+  // Detached owned legs remain visible and recoverable in the laboratory tray.
+  const detached=labLegDetails(machine).filter(leg=>!leg.installed);
+  if(detached.length){
+    const tray=document.createElement('section');tray.className='card';
+    const h=document.createElement('h2');h.textContent='DETACHED LEG TRAY';tray.append(h);
+    for(const leg of detached){
+      const b=button(leg.side.toUpperCase()+' LEG · INSTALL ON '+leg.socket.toUpperCase(),
+        ()=>doLegAction(leg.side,'attach'));
+      b.style.width='100%';b.style.marginBottom='5px';tray.append(b);
+    }
+    tree.append(tray);
+  }
   const mount=$('mount-control');mount.replaceChildren();
   const power=machine.installed.power && own(machine.installed.power);
   if(power){
@@ -110,11 +123,25 @@ function showTree(){
     }mount.append(card);
   }
 }
+function doLegAction(side,action){
+  const result=labLegAction(machine,side,action);
+  if(!result.ok){setMessage(result.reason,true);return;}
+  const leg=labLegDetails(machine).find(l=>l.side===side);
+  selectedSerial=action==='detach'?machine.installed.mobility:leg.serial;
+  selectedSocket=action==='detach'
+    ?{parentSerial:machine.installed.mobility,socketId:leg.socket}:null;
+  rebuild(false);switchTab('inspect');
+  setMessage('Yardwalker '+side+' leg '+(action==='attach'?'installed':'detached')+
+    ' · original geometry and serial retained.');
+}
 function renderInspection(){
   inspect.replaceChildren();
   const node=labNodeList(machine).find(n=>n.serial===selectedSerial);
+  const selectedLeg=labLegDetails(machine).find(l=>l.serial===selectedSerial);
   const card=document.createElement('section');card.className='card';
-  const heading=document.createElement('h2');heading.textContent=node?.name||'SELECT A PART';card.append(heading);
+  const heading=document.createElement('h2');
+  heading.textContent=node?.name||(selectedLeg?'Yardwalker '+selectedLeg.side+' leg · DETACHED':'SELECT A PART');
+  card.append(heading);
   if(node){
     const def=BY_ID.get(node.definitionId);
     const data=[
@@ -123,7 +150,7 @@ function renderInspection(){
       ['Attached to',node.parentSerial||'ROOT'],
       ['Socket',node.parentSocket||'—'],
       ['Mount',def?.mountSize||'—'],
-      ['Mass',def?.massKg+' kg'||'—'],
+      ['Mass',def?.id==='legs-yard'?'240 kg carriage + installed 500 kg legs':(def?def.massKg+' kg':'—')],
       ['Condition',own(node.serial)?Math.round((own(node.serial).condition||0)*100)+'%':'Structural adapter']
     ];
     data.forEach(([title,value])=>{
@@ -134,15 +161,67 @@ function renderInspection(){
     const description=document.createElement('p');description.className='meta';
     description.textContent=def?.description||'Adapter defined in the shared structural graph.';
     card.append(description);
-    if(def&&!SHARED_PART_IDS.includes(def.id)&&def.id!=='power-dynamo'){
+    if(def&&!SHARED_PART_IDS.includes(def.id)&&def.id!=='power-dynamo'&&def.assemblyRole!=='leg'){
       const note=document.createElement('p');note.className='meta';
       note.textContent='The shared standalone visual registry has not yet migrated this mesh. A labeled envelope placeholder is displayed.';
       card.append(note);
     }
   }
+  if(selectedLeg){
+    const action=selectedLeg.installed?'detach':'attach';
+    const b=button(action==='detach'?'DETACH '+selectedLeg.side.toUpperCase()+' LEG':
+      'REINSTALL '+selectedLeg.side.toUpperCase()+' LEG',
+      ()=>doLegAction(selectedLeg.side,action));
+    b.style.width='100%';card.append(b);
+    if(!selectedLeg.installed){
+      const note=document.createElement('p');note.className='meta';
+      note.textContent='Owned part '+selectedLeg.serial+' remains in the detached tray. It is not rendered as attached geometry.';
+      card.append(note);
+    }
+  }
   inspect.append(card);
+  if(selectedSocket){
+    const owner=labNodeList(machine).find(n=>n.serial===selectedSocket.parentSerial);
+    const socket=BY_ID.get(owner?.definitionId)?.sockets?.find(s=>s.id===selectedSocket.socketId);
+    if(socket){
+      const graph=labInspection(machine).graph;
+      const occupying=Object.values(graph.nodes).find(n=>n.parentSerial===owner.serial&&n.parentSocket===socket.id);
+      const panel=document.createElement('section');panel.className='card';
+      const h=document.createElement('h2');h.textContent='ATTACHMENT · '+socket.id.toUpperCase();panel.append(h);
+      const rows=[
+        ['Owner',owner.name],['Standard',socket.standard],
+        ['Position (m)',socket.position.map(n=>n.toFixed(3)).join(', ')],
+        ['Face normal',socket.normal?.join(', ')||'not specified'],
+        ['Load rating',socket.maxLoadKg+' kg'],
+        ['Occupied by',occupying?.serial||'EMPTY']
+      ];
+      for(const [label,value] of rows){
+        const row=document.createElement('div');row.className='metric';
+        const a=document.createElement('span'),b=document.createElement('strong');
+        a.textContent=label;b.textContent=value;row.append(a,b);panel.append(row);
+      }
+      const leg=labLegDetails(machine).find(l=>l.socket===socket.id);
+      if(leg){
+        const compatible=leg.definitionId==='yardwalker-leg-'+leg.side;
+        const line=document.createElement('p');line.className='meta';
+        line.textContent=compatible?'Compatible: owned Yardwalker '+leg.side+
+          ' leg · same medium interface · 500 kg / 650 kg capacity.':
+          'No authored compatible components';
+        panel.append(line);
+        const action=leg.installed?'detach':'attach';
+        const b=button((action==='attach'?'INSTALL':'DETACH')+' '+leg.side.toUpperCase()+' LEG',
+          ()=>doLegAction(leg.side,action));
+        b.style.width='100%';panel.append(b);
+      } else {
+        const note=document.createElement('p');note.className='meta';
+        note.textContent='This socket is inspectable. Arbitrary equipment reattachment is not enabled in Stage 06.';
+        panel.append(note);
+      }
+      inspect.append(panel);
+    }
+  }
   const info=document.createElement('p');info.className='explain';
-  info.textContent='This stage supports the existing full assemblies and real adapter mounts. Individual knees, shins, and unrestricted attachments are deliberately not editable yet.';
+  info.textContent='Stage 06: independent, individually owned Yardwalker legs. Existing Kestrel/Hauler remain paired modules. Knees, shins and cross-family leg swaps come later.';
   inspect.append(info);
 }
 function switchTab(which){
@@ -194,10 +273,24 @@ function buildModels(){
   if(!frameDef){setMessage('Missing structural frame.',true);return;}
   nodeWorldPoses=graphWorldPoses(graph,BY_ID,frameDef.center);
   const nodes=labNodeList(machine);
+  let yardwalkerLegVisuals=null;
   nodes.forEach(node=>{
     const pose=nodeWorldPoses.get(node.serial);if(!pose)return;
     const def=BY_ID.get(node.definitionId);
-    const model=def?makeVisual(def):makeAdapterVisual(node);
+    let model;
+    if(def?.id==='legs-yard'){
+      model=makeVisual(def);
+      // These are the exact original authored leg groups, not replicated
+      // primitive stand-ins. The parent mesh becomes the bare carriage.
+      yardwalkerLegVisuals={
+        left:extractYardwalkerLeg(model,'left'),
+        right:extractYardwalkerLeg(model,'right')
+      };
+    } else if(def?.assemblyRole==='leg'){
+      if(!yardwalkerLegVisuals?.[def.side])
+        throw new Error('A leg cannot render without the owning Yardwalker carriage');
+      model=yardwalkerLegVisuals[def.side];
+    } else model=def?makeVisual(def):makeAdapterVisual(node);
     model.name='lab:'+node.serial;
     model.userData.labSerial=node.serial;
     model.position.set(...pose.position);model.rotation.y=pose.rotationQuarterTurns*Math.PI/2;
@@ -268,10 +361,14 @@ function rebuild(fit=true){
   const verdict=labInspection(machine);
   const nr=labNodeList(machine).length;
   const absent=LAB_SLOTS.filter(s=>!machine.installed[s]).length;
-  stats.textContent=nr+' PHYSICAL GRAPH NODES · '+Math.round(verdict.machineCheck.massKg)+' KG';
-  $('stageMode').textContent=absent?'INCOMPLETE':'STRUCTURAL GRAPH V1';
+  const yard=verdict.mobility;
+  stats.textContent=nr+' NODES · '+Math.round(verdict.machineCheck.massKg)+' KG'+
+    (yard.legs?' · '+yard.legs+'/2 LEGS':'');
+  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 06 · ASSEMBLED':'STAGE 06 · INCOMPLETE';
   if(!verdict.valid)setMessage(verdict.graphCheck.errors.join(' | '),true);
-  else if(!verdict.ready)setMessage('Structurally valid · not combat-ready in live rules',false);
+  else if(!verdict.ready)setMessage(verdict.mobility.complete?
+    'Structurally valid · not combat-ready in live rules':
+    'Structurally valid · detached leg: mobility incomplete',false);
   else setMessage('Assembly graph valid · '+nr+' nodes');
   if(bounds&&fit)reframe();
   refreshSelection();
@@ -293,11 +390,12 @@ function pick(x,y){
   const marker=markerGroup.visible?raycaster.intersectObjects(sockets,false)[0]:null;
   if(marker){
     selectedSerial=marker.object.userData.socketParent;
+    selectedSocket={parentSerial:selectedSerial,socketId:marker.object.userData.socketId};
     setMessage('Socket '+marker.object.userData.socketId+' on '+selectedSerial);
   }else{
     const hit=raycaster.intersectObjects(rayTargets,false).find(h=>h.object.visible);
     if(!hit)return;
-    selectedSerial=hit.object.userData.labSerial;
+    selectedSerial=hit.object.userData.labSerial;selectedSocket=null;
   }
   refreshSelection();showTree();renderInspection();switchTab('inspect');
 }
@@ -309,7 +407,7 @@ $('view-front').addEventListener('click',()=>cameraPreset('front'));
 $('view-side').addEventListener('click',()=>cameraPreset('side'));
 $('view-top').addEventListener('click',()=>cameraPreset('top'));
 $('reset').addEventListener('click',()=>{
-  machine=createLabMachine();selectedSlot='structure';selectedSerial=machine.installed.structure;isolate=false;
+  machine=createLabMachine();selectedSlot='structure';selectedSerial=machine.installed.structure;selectedSocket=null;isolate=false;
   $('isolate').setAttribute('aria-pressed','false');explode.value='0';rebuild(true);setMessage('Clean test rig restored');
 });
 $('isolate').addEventListener('click',()=>{
@@ -334,7 +432,7 @@ $('import-file').addEventListener('change',async event=>{
   if(file.size>250000){setMessage('Blueprint exceeds 250 KB limit.',true);return;}
   try{
     const next=loadLabBlueprint(JSON.parse(await file.text()));
-    machine=next;selectedSerial=machine.installed.structure;rebuild(true);
+    machine=next;selectedSerial=machine.installed.structure;selectedSocket=null;rebuild(true);
     setMessage('Blueprint imported and validated.');
   }catch(error){setMessage('Import blocked: '+error.message,true);}
 });
