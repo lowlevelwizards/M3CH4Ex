@@ -19,8 +19,12 @@ import {
 import {
   currentPose,setJointAngle,applyPosePreset,validatePose,articulationReport
 } from './constructionArticulation.js';
+import {
+  neutralGrounding,groundedTargets,applyGrounding,returnToManual,
+  validateGrounding,solveGroundedRig,contactWalkFrame
+} from './constructionGroundedPose.js';
 
-export const LAB_BLUEPRINT_VERSION=4;
+export const LAB_BLUEPRINT_VERSION=5;
 export const LAB_SLOTS=Object.freeze([...SLOTS]);
 export const LAB_PARTS=Object.freeze([...BY_ID.values()]);
 export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'});
@@ -130,6 +134,8 @@ export function labSectionAction(assembly,side,section,action,options={}){
 }
 export function labJointAction(assembly,side,joint,degrees){
   const snapshot=structuredClone(assembly);
+  // Direct hinge manipulation deliberately leaves foot-target IK mode.
+  if(assembly.labGrounding?.mode==='grounded')returnToManual(assembly);
   const result=setJointAngle(assembly,side,joint,degrees);
   if(!result.ok)return result;
   const verdict=articulationReport(assembly);
@@ -142,6 +148,7 @@ export function labJointAction(assembly,side,joint,degrees){
 }
 export function labPosePreset(assembly,name){
   const snapshot=structuredClone(assembly);
+  if(assembly.labGrounding?.mode==='grounded')returnToManual(assembly);
   const result=applyPosePreset(assembly,name);
   if(!result.ok)return result;
   const report=articulationReport(assembly);
@@ -153,6 +160,29 @@ export function labPosePreset(assembly,name){
   return result;
 }
 export function labPose(assembly){return currentPose(assembly);}
+export function labGrounding(assembly){return structuredClone(assembly.labGrounding||neutralGrounding());}
+export function labAssistedPreset(assembly,name){
+  const snapshot=structuredClone(assembly);
+  try{
+    if(!yardLegSupported(assembly)||!anatomyReadiness(assembly))
+      return {ok:false,reason:'Serviceable Yardwalker legs must be installed for grounded posing.'};
+    const targets=groundedTargets(name);
+    const result=applyGrounding(assembly,targets);
+    if(!result.ok)throw Error(result.reason);
+    return {ok:true,mode:'grounded',contacts:result.contacts};
+  }catch(error){
+    Object.keys(assembly).forEach(key=>delete assembly[key]);
+    Object.assign(assembly,snapshot);
+    return {ok:false,reason:error.message};
+  }
+}
+export function labGuidedWalkFrame(assembly,phase){
+  if(!Number.isFinite(phase))return {ok:false,reason:'Invalid step progress'};
+  if(!yardLegSupported(assembly)||!anatomyReadiness(assembly))
+    return {ok:false,reason:'Both serviceable legs required'};
+  return applyGrounding(assembly,contactWalkFrame(phase));
+}
+export function labReturnManual(assembly){return returnToManual(assembly);}
 export function labLegDetails(assembly){
   return LEG_SIDES.map(side=>{
     const part=assembly.owned.find(p=>p.definitionId===YARD_LEG_IDS[side]);
@@ -178,10 +208,12 @@ export function labBlueprint(assembly){
         .map(n=>({...n})).sort((a,b)=>a.serial.localeCompare(b.serial)),
       stowed:structuredClone(assembly.labStowed||{})
     },
-    pose:currentPose(assembly)};
+    pose:currentPose(assembly),
+    grounding:labGrounding(assembly),
+    manualPose:structuredClone(assembly.labManualPose||currentPose(assembly))};
 }
 export function loadLabBlueprint(input){
-  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,LAB_BLUEPRINT_VERSION].includes(input.version)
+  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,LAB_BLUEPRINT_VERSION].includes(input.version)
     ||!input.stations||typeof input.stations!=='object'
     ||Object.keys(input.stations).some(k=>!LAB_SLOTS.includes(k)))
       throw new Error('Unsupported or invalid lab blueprint.');
@@ -218,6 +250,20 @@ export function loadLabBlueprint(input){
     machine.labPose={...input.pose};
     const articulated=articulationReport(machine);
     if(!articulated.valid)throw new Error(articulated.errors.concat(articulated.warnings).join('; '));
+  }
+  if(input.version>=5){
+    const validated=validateGrounding(input.grounding),manual=validatePose(input.manualPose);
+    if(!validated.valid||!manual.valid)
+      throw new Error([...validated.errors,...manual.errors].join('; '));
+    machine.labManualPose={...input.manualPose};
+    if(input.grounding.mode==='grounded'){
+      const computed=solveGroundedRig(input.grounding);
+      if(!computed.ok)throw new Error(computed.reason);
+      for(const [key,value] of Object.entries(computed.pose))
+        if(Math.abs(value-machine.labPose[key])>.003)
+          throw new Error('Grounded foot targets disagree with stored joint positions');
+    }
+    machine.labGrounding=structuredClone(input.grounding);
   }
   const result=labInspection(machine);
   if(!result.valid)throw new Error(result.graphCheck.errors.concat(result.articulation.errors).join(' '));
