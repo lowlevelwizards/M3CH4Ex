@@ -52,8 +52,9 @@ export function ensureDeviceInventory(assembly){
  for(const def of RAW){
   const owned=assembly.owned.filter(p=>p.definitionId===def.id);
   if(owned.length===0)throw Error('Missing device '+def.id);
-  if(owned.length===1)assembly.owned.push({
-   serial:'LAB-MECH-2-'+def.id,definitionId:def.id,condition:1,wear:0,repairs:0
+  for(let i=owned.length;i<3;i++)assembly.owned.push({
+   serial:'LAB-MECH-'+(i+1)+'-'+def.id,
+   definitionId:def.id,condition:1,wear:0,repairs:0
   });
  }
  if(!assembly.labMechanisms)assembly.labMechanisms={left:{},right:{}};
