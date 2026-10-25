@@ -78,6 +78,23 @@ function renderCatalog(){
     text.append(name,meta);const indicator=document.createElement('b');
     indicator.textContent=def.id===installed?'FITTED':'+ FIT';entry.append(text,indicator);catalog.append(entry);
   });
+  if(selectedSlot==='mobility'){
+    const workbench=document.createElement('section');workbench.className='card';
+    const title=document.createElement('h2');title.textContent='STAGE 06 / INDEPENDENT LEGS';
+    workbench.append(title);
+    const note=document.createElement('p');note.className='meta';
+    note.textContent=installed==='legs-yard'
+      ?'Select either hip to remove or reinstall the actual owned Yardwalker leg. Both sides are independent.'
+      :'Independent limb sockets are currently authored for Yardwalker only. Choose Yardwalker above to test.';
+    workbench.append(note);
+    for(const leg of labLegDetails(machine)){
+      const b=button(leg.side.toUpperCase()+' · '+(leg.installed?'DETACH':'INSTALL'),
+        ()=>doLegAction(leg.side,leg.installed?'detach':'attach'));
+      b.disabled=installed!=='legs-yard';
+      b.style.width='100%';b.style.marginBottom='6px';workbench.append(b);
+    }
+    catalog.prepend(workbench);
+  }
 }
 function own(serial){return machine.owned.find(p=>p.serial===serial);}
 function showTree(){
