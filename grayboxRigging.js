@@ -11,7 +11,7 @@ export function localSocket(frame,socket){
  // Socket definitions already describe local steel-bearing frame interfaces.
  // Do not shift sockets when an armor level or housing enlarges an AABB.
  const p=socket.pos.slice();
- if(socket.id==='mobility-bottom')p[1]=-h*.45;
+ if(socket.id==='mobility-bottom')p[1]=frame.id==='frame-spire-gb'?-h*.36:-h*.45;
  else if(socket.id==='cab-top')p[1]=h*.49;
  else if(socket.id==='cab-front')p[2]=-d*.44;
  else if(socket.id==='combat-left'||socket.id==='combat-right'
