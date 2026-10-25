@@ -10,7 +10,7 @@ import {advanceYardPilot,initialYardPilot,profileFor,
 
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const material=(color,metalness=0)=>new THREE.MeshStandardMaterial({
- color,roughness:metalness?.69:1,metalness,flatShading:true});
+ color,roughness:metalness ? .69 : 1,metalness,flatShading:true});
 const concrete=material('#878b81'),steel=material('#505b55',.32),
  bright=material('#d2a14b',.15),yellow=material('#d9ae55'),
  dark=material('#424845'),targetMat=()=>material('#c4bba1'),
@@ -92,7 +92,7 @@ function mountMovableJoints(root){
  });
  return pivots;
 }
-export function createConstructorYard({scene,camera,stage,onMessage}){
+export function createConstructorYard({scene,camera,stage,onMessage,onGarage}){
  const world=new THREE.Group();world.name='M3CH4EX / Integrated physical test yard';
  scene.add(world);paintGround(world);
  const dummies=YARD_TARGETS.map(t=>makeTarget(world,t));
@@ -109,7 +109,7 @@ export function createConstructorYard({scene,camera,stage,onMessage}){
   info=document.getElementById('yard-readout');
  const controls={forward:0,strafe:0,turn:0,fire:false};
  const keys=new Set(),raycaster=new THREE.Raycaster(),tracers=[];
- let rig=null,parts=[],joints=[],pilot=initialYardPilot(),mode='garage',
+ let rig=null,parts=[],joints=[],weaponId=null,pilot=initialYardPilot(),mode='garage',
   lookPointer=null,lastX=0,lastY=0,pitch=.06,shots=0,hits=0,cooldown=0;
  let joystickPointer=null;
  const cameras=['CHASE','CAB'];let cameraMode=0;
@@ -123,8 +123,8 @@ export function createConstructorYard({scene,camera,stage,onMessage}){
   document.getElementById('yard-hits').textContent=
    hits+' HITS · '+dummies.filter(d=>d.userData.hp===0).length+'/3 TARGETS';
  }
- function setRig(root,objects=[]){
-  rig=root;parts=objects;joints=mountMovableJoints(root);
+ function setRig(root,objects=[],weapon=null){
+  rig=root;parts=objects;weaponId=weapon;joints=mountMovableJoints(root);
   root.position.set(0,0,26);root.rotation.set(0,0,0);
   for(const p of joints)p.node.rotation.x=p.rest;
  }
@@ -159,6 +159,8 @@ export function createConstructorYard({scene,camera,stage,onMessage}){
   rigHud.hidden=true;scene.fog=null;
   scene.background.set('#f4f6f3');
   resetPilot();
+  document.getElementById('yard-camera').textContent='VIEW: CHASE';
+  onGarage?.();
   status('Back in the yard workshop. Your exact construction is unchanged.');
  }
  function positionCamera(immediate=false){
@@ -218,7 +220,7 @@ export function createConstructorYard({scene,camera,stage,onMessage}){
   rig.position.y=Math.sin(phase*2)*.009*weight;
   rig.updateMatrixWorld(true);
   cooldown=Math.max(0,cooldown-sec);
-  if(controls.fire||keys.has('Space'))shoot(mobilityId);
+  if(controls.fire||keys.has('Space'))shoot();
   for(let i=tracers.length-1;i>=0;i--){
    const t=tracers[i];t.life-=sec;
    if(t.life<=0){world.remove(t.mesh);t.mesh.geometry.dispose();
@@ -226,12 +228,12 @@ export function createConstructorYard({scene,camera,stage,onMessage}){
   }
   positionCamera();updateHud();
  }
- function shoot(weapon){
+ function shoot(){
   if(mode!=='pilot'||cooldown>0||!rig)return;
   const mount=parts.find(x=>x.category==='combat')?.group;
   if(!mount)return;
-  cooldown=weapon==='gun-rivet'?.12:
-   weapon==='gun-scatter'?.65:weapon==='gun-cannon'?.8:.40;
+  cooldown=weaponId==='gun-rivet'?.12:
+   weaponId==='gun-scatter'?.65:weaponId==='gun-cannon'?.8:.40;
   shots++;
   rig.updateMatrixWorld(true);
   const from=mount.localToWorld(new THREE.Vector3(0,.04,-.75));
