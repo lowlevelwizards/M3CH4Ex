@@ -13,7 +13,8 @@ import {
 import {
   ANATOMY_ORDER,anatomyId,sectionStatus,anatomyReadiness,rigAnatomyMass,
   installedLimbGeometry,
-  installDefaultAnatomy,detachAnatomyBranch,installAnatomyBranch,swapShin,
+  installDefaultAnatomy,detachAnatomyBranch,installAnatomyBranch,
+  replaceAnatomyComponent,swapShin,
   detachWholeLeg,restoreWholeLeg,temporarilyStripLegs,reinstateLegs,partStowList,
   restoreAnatomyBlueprint
 } from './constructionAnatomy.js';
@@ -25,7 +26,7 @@ import {
   validateGrounding,solveGroundedRig,contactWalkFrame
 } from './constructionGroundedPose.js';
 
-export const LAB_BLUEPRINT_VERSION=6;
+export const LAB_BLUEPRINT_VERSION=7;
 export const LAB_SLOTS=Object.freeze([...SLOTS]);
 export const LAB_PARTS=Object.freeze([...BY_ID.values()]);
 export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'});
@@ -130,21 +131,21 @@ export function labSectionAction(assembly,side,section,action,options={}){
     {cascade:!!options.cascade});
   if(action==='attach')return installAnatomyBranch(assembly,side,section,
     {variant:options.variant||'original'});
-  if(action==='swap'&&section==='shin'){
+  if(action==='swap'){
     const snapshot=structuredClone(assembly);
-    const before=assembly.labGrounding?.mode==='grounded';
-    const result=swapShin(assembly,side,options.variant||'rook');
+    const wasGrounded=assembly.labGrounding?.mode==='grounded';
+    const result=replaceAnatomyComponent(assembly,side,section,options.variant||'original');
     if(!result.ok)return result;
-    // Longer components can change which crouches are reachable. On a change
-    // involving Pylon or a prior guided pose, recompute a *real* grounded stance.
-    if(anatomyReadiness(assembly)&&
-       (options.variant==='extended'||before)){
-      const target=before&&snapshot.labGrounding?.bodyDropM>0?'crouch':'neutral';
-      const grounded=labAssistedPreset(assembly,target);
+    // Generic swapping affects geometry and/or sole contact height.
+    // If the assembled leg can stand, recompute grounded IK using only new
+    // component metadata; the caller cannot replace foot placement by eye.
+    if(anatomyReadiness(assembly)&&(wasGrounded||options.variant!=='original')){
+      const pose=wasGrounded&&snapshot.labGrounding?.bodyDropM>0?'crouch':'neutral';
+      const grounded=labAssistedPreset(assembly,pose);
       if(!grounded.ok){
         Object.keys(assembly).forEach(key=>delete assembly[key]);
         Object.assign(assembly,snapshot);
-        return {ok:false,reason:'Shin fits structurally but has no valid grounded stance: '+grounded.reason};
+        return {ok:false,reason:'Mechanical interfaces fit but no valid grounded stance: '+grounded.reason};
       }
       return {...result,grounded,stanceAdjusted:grounded.limited};
     }
@@ -304,7 +305,7 @@ export function labBlueprint(assembly){
     manualPose:structuredClone(assembly.labManualPose||currentPose(assembly))};
 }
 export function loadLabBlueprint(input){
-  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,5,LAB_BLUEPRINT_VERSION].includes(input.version)
+  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,5,6,LAB_BLUEPRINT_VERSION].includes(input.version)
     ||!input.stations||typeof input.stations!=='object'
     ||Object.keys(input.stations).some(k=>!LAB_SLOTS.includes(k)))
       throw new Error('Unsupported or invalid lab blueprint.');
