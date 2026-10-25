@@ -244,7 +244,9 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   if(mount.category==='combat'){
    if(socket.role==='roof')group.position.y+=.15;
   }
-  if(mount.category==='support'&&socket.role==='rear')group.rotation.y=Math.PI;
+  // Every assembly inherits an authored attachment orientation, regardless
+  // of whether it is a weapon, utility pod, cockpit or power module.
+  group.rotation.set(...socket.rotation);
   root.add(group);objects.push({category:mount.category,group,socket:mount.socket});
  }
  return {root,sockets,objects};
