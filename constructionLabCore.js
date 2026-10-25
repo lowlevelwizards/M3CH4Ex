@@ -16,8 +16,11 @@ import {
   detachWholeLeg,restoreWholeLeg,temporarilyStripLegs,reinstateLegs,partStowList,
   restoreAnatomyBlueprint
 } from './constructionAnatomy.js';
+import {
+  currentPose,setJointAngle,applyPosePreset,validatePose,articulationReport
+} from './constructionArticulation.js';
 
-export const LAB_BLUEPRINT_VERSION=3;
+export const LAB_BLUEPRINT_VERSION=4;
 export const LAB_SLOTS=Object.freeze([...SLOTS]);
 export const LAB_PARTS=Object.freeze([...BY_ID.values()]);
 export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'});
@@ -37,11 +40,12 @@ export function labInspection(assembly){
   const rawCheck=inspectAssembly(assembly);
   const legs=LEG_SIDES.filter(side=>installedLeg(assembly,side)).length;
   const mobility={legs,complete:anatomyReadiness(assembly)};
+  const articulation=articulationReport(assembly);
   const machineCheck={...rawCheck,
     massKg:rigAnatomyMass(assembly,rawCheck.massKg),
-    ready:rawCheck.ready&&mobility.complete};
-  return {graph,graphCheck,machineCheck,mobility,
-    valid:graphCheck.valid,ready:machineCheck.ready};
+    ready:rawCheck.ready&&mobility.complete&&articulation.valid};
+  return {graph,graphCheck,machineCheck,mobility,articulation,
+    valid:graphCheck.valid&&articulation.errors.length===0,ready:machineCheck.ready};
 }
 
 /** Stage 02–05: slot swaps remain transactions through existing production rules.
@@ -124,6 +128,31 @@ export function labSectionAction(assembly,side,section,action,options={}){
   if(action==='swap'&&section==='shin')return swapShin(assembly,side,options.variant||'rook');
   return {ok:false,reason:'Unsupported anatomical operation'};
 }
+export function labJointAction(assembly,side,joint,degrees){
+  const snapshot=structuredClone(assembly);
+  const result=setJointAngle(assembly,side,joint,degrees);
+  if(!result.ok)return result;
+  const verdict=articulationReport(assembly);
+  if(!verdict.valid){
+    Object.keys(assembly).forEach(key=>delete assembly[key]);
+    Object.assign(assembly,snapshot);
+    return {ok:false,reason:verdict.errors.concat(verdict.warnings).join('; ')};
+  }
+  return result;
+}
+export function labPosePreset(assembly,name){
+  const snapshot=structuredClone(assembly);
+  const result=applyPosePreset(assembly,name);
+  if(!result.ok)return result;
+  const report=articulationReport(assembly);
+  if(!report.valid){
+    Object.keys(assembly).forEach(key=>delete assembly[key]);
+    Object.assign(assembly,snapshot);
+    return {ok:false,reason:report.errors.concat(report.warnings).join('; ')};
+  }
+  return result;
+}
+export function labPose(assembly){return currentPose(assembly);}
 export function labLegDetails(assembly){
   return LEG_SIDES.map(side=>{
     const part=assembly.owned.find(p=>p.definitionId===YARD_LEG_IDS[side]);
@@ -148,10 +177,11 @@ export function labBlueprint(assembly){
         .filter(node=>BY_ID.get(node.definitionId)?.assemblyRole==='anatomy')
         .map(n=>({...n})).sort((a,b)=>a.serial.localeCompare(b.serial)),
       stowed:structuredClone(assembly.labStowed||{})
-    }};
+    },
+    pose:currentPose(assembly)};
 }
 export function loadLabBlueprint(input){
-  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,LAB_BLUEPRINT_VERSION].includes(input.version)
+  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,LAB_BLUEPRINT_VERSION].includes(input.version)
     ||!input.stations||typeof input.stations!=='object'
     ||Object.keys(input.stations).some(k=>!LAB_SLOTS.includes(k)))
       throw new Error('Unsupported or invalid lab blueprint.');
@@ -182,8 +212,15 @@ export function loadLabBlueprint(input){
       if(!restored.ok)throw new Error(restored.reason);
     }
   }
+  if(input.version>=4){
+    const tested=validatePose(input.pose);
+    if(!tested.valid)throw new Error(tested.errors.join('; '));
+    machine.labPose={...input.pose};
+    const articulated=articulationReport(machine);
+    if(!articulated.valid)throw new Error(articulated.errors.concat(articulated.warnings).join('; '));
+  }
   const result=labInspection(machine);
-  if(!result.valid)throw new Error(result.graphCheck.errors.join(' '));
+  if(!result.valid)throw new Error(result.graphCheck.errors.concat(result.articulation.errors).join(' '));
   return machine;
 }
 export function labNodeList(assembly){
