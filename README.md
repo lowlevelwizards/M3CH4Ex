@@ -206,3 +206,20 @@ The independently hosted [Graybox Builder](https://lowlevelwizards.github.io/M3C
 **Save compatibility:** Graybox v1 remains readable. Newly optional `form` and `limbPlating` records default automatically when opening an existing Stage 12/13 blueprint. The detailed M3CH4Ex lab, its v9 assembly blueprints, and live M3CH4 remain unchanged.
 
 **Current limitations:** The new Stubber locomotion, shield collision, arm IK, weight/torque, new armor hitboxes, optional auxiliary behaviors and transfer of graybox rigs into the campaign are **not implemented**. Load/power in this builder is a coarse planning indicator, with arm motion demand reported as a separate potential peak rather than continuously charged while static. Future work should prioritize visual mounting audits and player-readable construction workflows before advanced simulation.
+
+## Stage 15 — Mechanical mating, armor anchoring, and isolated inspection
+
+**Purpose.** Follow up the broad Stage 14 experiment with mechanically intelligible joints, physically seated mounts, and a readable ten-reference presentation without inventing more mandatory combat stations.
+
+- `grayboxRigging.js` holds stable frame-local steel mating datums. Optional shells and armor do **not** shift these mounting interfaces. Installed hardpoints receive visible load-spreader plates and steel retainers; unoccupied hardpoints don't clutter the silhouette.
+- Stage 11 manipulator links now use each authored `mechanical.end` to place the next joint, ending with wrist-mounted actual gripper jaws; heavy and light arms reuse a single connection chain. The assembly models remain static in Graybox. Future live arm control must use joint limits, actual actuators and collision checks.
+- Structural combat mount configurations have physically distinct mechanisms: hanging two-link carriers and a rigid **raised pintle**. The weapon breech seats at the carrier terminal; shields attach at the actual weapon-carrier receiver and inherit the weapon assembly's motion in the scene hierarchy.
+- Angular, rounded and cylindrical housings now have supporting side brackets. The vertical drum wraps the machine instead of resembling a flat front-mounted disk. Native live-game part models still take precedence wherever they exist.
+- Feet now reference the original authored leg `foot` and `ankle` anchors rather than the overall mobility AABB; independent protective thigh and shin shells follow each specific leg's hip/knee/ankle positions. Existing live Kestrel, Yardwalker and Hauler mobility geometry remains in place.
+- Support devices gain visibly bolted brackets, braces and stems. Supplemental Bare/Armored/Encased native coverings gain retaining brackets instead of unsupported decorative AABB plates.
+- Camera automatically frames each current build or isolated part at phone and desktop viewport sizes, while preserving intentional manual pinch/wheel zoom. Compact Stubber now receives its own accurate prototype warning rather than a misleading Crawler notice.
+- **Part Audit tab:** choose any of the 29 catalogued part types, view it alone with an explicit input reference, select Bare/Armored/Encased, or compare all three side-by-side. `grayboxAudit.js` renders the same shared asset builder used by the main workshop.
+
+**Checks.** Existing mandatory-station, mass/power and save/load tests are preserved. Stage 15 adds automated inspection of all 29 parts at all 3 coverage levels (87 preview variants), connected arm-chain endpoints, distinct weapon carriers, permanent hardpoints independent of housings, foot/armor alignment against established mobility data, and full browser smoke for mobile Part Audit and Stubber labels.
+
+**Boundaries.** This pass fixes static workshop construction geometry, not live-game motion, articulated collision volumes, physical damage simulation, power-transmission routing or production support behaviors. Visual clearance from every possible camera angle still needs hands-on screenshot evaluation in the experimental builder before transferring these designs to the campaign.
