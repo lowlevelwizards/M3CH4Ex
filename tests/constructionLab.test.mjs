@@ -5,7 +5,8 @@ import {
   createLabMachine, labEquip, labInspection, labBlueprint, loadLabBlueprint,
   labNodeList, labSetGeneratorMount, labLegAction, labLegDetails,
   labSectionAction, labSectionDetails, labStowed,
-  labJointAction,labPosePreset,labPose
+  labJointAction,labPosePreset,labPose,
+  labAssistedPreset,labGuidedWalkFrame,labGrounding,labReturnManual
 } from '../constructionLabCore.js';
 
 test('default lab rig is an authentic, graph-valid five-station machine',()=>{
@@ -198,7 +199,7 @@ test('Stage 07 blueprint roundtrip preserves mixed shins and stowed supported br
   assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
   assert.equal(labSectionAction(rig,'right','shin','detach',{cascade:true}).ok,true);
   const bp=labBlueprint(rig);
-  assert.equal(bp.version,4);
+  assert.equal(bp.version,5);
   const saved=JSON.stringify(bp);
   const restored=loadLabBlueprint(bp);
   assert.equal(JSON.stringify(labBlueprint(restored)),saved);
@@ -260,7 +261,7 @@ test('Stage 08 blueprint persists six mechanical degrees of freedom with v3 comp
   assert.equal(labJointAction(machine,'right','hip',-20).ok,true);
   assert.equal(labSectionAction(machine,'left','shin','swap',{variant:'rook'}).ok,true);
   const bp=labBlueprint(machine);
-  assert.equal(bp.version,4);
+  assert.equal(bp.version,5);
   const restored=loadLabBlueprint(bp);
   assert.deepEqual(labPose(restored),labPose(machine));
   assert.deepEqual(labBlueprint(restored),bp);
@@ -268,7 +269,7 @@ test('Stage 08 blueprint persists six mechanical degrees of freedom with v3 comp
   assert.throws(()=>loadLabBlueprint(malformed));
   const foreign=structuredClone(bp);foreign.pose['left:unknown']=5;
   assert.throws(()=>loadLabBlueprint(foreign));
-  const v3=structuredClone(bp);v3.version=3;delete v3.pose;
+  const v3=structuredClone(bp);v3.version=3;delete v3.pose;delete v3.grounding;delete v3.manualPose;
   const migrated=loadLabBlueprint(v3);
   assert.ok(Object.values(labPose(migrated)).every(x=>x===0));
 });
@@ -281,4 +282,70 @@ test('Stage 08 pose state persists through equipment changes and independent shi
   assert.equal(labSetGeneratorMount(machine,'offset').ok,true);
   assert.deepEqual(labPose(machine),before);
   assert.equal(labInspection(machine).valid,true);
+});
+
+test('08D reuses the same solver for grounded crouch on existing legs and Rook shin',()=>{
+  const rig=createLabMachine();
+  let check=labAssistedPreset(rig,'crouch');
+  assert.equal(check.ok,true,check.reason);
+  assert.equal(labGrounding(rig).bodyDropM,.15);
+  assert.equal(labGrounding(rig).feet.left.planted,true);
+  assert.equal(labGrounding(rig).feet.right.planted,true);
+  assert.ok(labPose(rig)['left:knee']>20,'knee compresses while body descends');
+  const before=labPose(rig);
+  assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
+  check=labAssistedPreset(rig,'crouch');
+  assert.equal(check.ok,true,check.reason);
+  assert.deepEqual(labPose(rig),before,'shared interfaces yield identical kinematics');
+  assert.equal(labInspection(rig).valid,true);
+});
+test('08D assisted step presets keep the supporting foot planted',()=>{
+  const rig=createLabMachine();
+  for(const name of ['neutral','step-left','step-right','asymmetric']){
+    const r=labAssistedPreset(rig,name);
+    assert.equal(r.ok,true,name+': '+r.reason);
+  }
+  assert.equal(labGrounding(rig).mode,'grounded');
+  assert.equal(labAssistedPreset(rig,'bogus').ok,false);
+});
+test('08D manual controls are distinct from planted-foot pose controls',()=>{
+  const rig=createLabMachine();
+  assert.equal(labAssistedPreset(rig,'crouch').ok,true);
+  assert.equal(labGrounding(rig).mode,'grounded');
+  assert.equal(labJointAction(rig,'left','knee',25).ok,true);
+  assert.equal(labGrounding(rig).mode,'manual');
+  assert.equal(labPose(rig)['left:knee'],25);
+  assert.equal(labAssistedPreset(rig,'neutral').ok,true);
+  assert.equal(labReturnManual(rig).ok,true);
+  assert.equal(labGrounding(rig).mode,'manual');
+});
+test('08D lab can replay deterministic two-step targets without a foot skating',()=>{
+  const rig=createLabMachine();
+  const all=[];
+  for(let i=0;i<=20;i++){
+    const t=i/20,result=labGuidedWalkFrame(rig,t);
+    assert.equal(result.ok,true,'t='+t+' '+result.reason);
+    all.push(labGrounding(rig));
+  }
+  assert.ok(all.slice(1,10).every(g=>g.feet.right.planted));
+  assert.ok(all.slice(11,19).every(g=>g.feet.left.planted&&g.feet.left.z===-.25));
+  assert.equal(labGrounding(rig).mode,'grounded');
+});
+test('08D v5 blueprint stores foot targets and rejects mismatched joint data',()=>{
+  const rig=createLabMachine();
+  const result=labAssistedPreset(rig,'step-left');
+  assert.equal(result.ok,true,result.reason);
+  const blueprint=labBlueprint(rig);
+  assert.equal(blueprint.version,5);
+  const imported=loadLabBlueprint(blueprint);
+  assert.deepEqual(labBlueprint(imported),blueprint);
+  const corrupted=structuredClone(blueprint);
+  corrupted.pose['left:knee']=0;
+  assert.throws(()=>loadLabBlueprint(corrupted));
+  const floating=structuredClone(blueprint);
+  floating.grounding.feet.right={z:0,y:.2,planted:true};
+  assert.throws(()=>loadLabBlueprint(floating));
+  const v4=structuredClone(blueprint);v4.version=4;
+  delete v4.grounding;delete v4.manualPose;
+  assert.equal(labGrounding(loadLabBlueprint(v4)).mode,'manual');
 });
