@@ -2,7 +2,7 @@
  * render from the same socket + category metadata: no whole-mech presets.
  */
 import * as THREE from 'three';
-import {BY_PART,socketsForFrame} from './grayboxCore.js';
+import {BY_PART,socketsForBuild} from './grayboxCore.js';
 import {buildSharedVisual} from './grayboxSharedVisual.js';
 import {buildFrameExtensions,buildBodyHousing,buildWeaponCarrier,
  buildFeetAccessory,buildFrameRiser} from './grayboxFormVisual.js';
@@ -388,19 +388,24 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
  const frameY=height-.07-frameBounds.min.y-drop;
  body.position.y=frameY;root.add(body);
  objects.push({category:'frame',group:body,source:body.userData.grayboxVisualSource||'graybox'});
- const allSockets=socketsForFrame(state.frame);
+ const allSockets=socketsForBuild(state);
  const physical=new Map(allSockets.map(socket=>[
   socket.id,physicalSocketPosition(socket,frameBounds)
  ]));
- for(const socket of allSockets){
-  const pos=physical.get(socket.id),world=[pos[0],pos[1]+frameY,pos[2]];
-  if(socketVisible||highlightCategory===socket.station){
-   const glyph=sphere(root,world,highlightCategory===socket.station?.095:.055,
-    highlightCategory===socket.station?localMat('#d3a34b',.15,.90):
-      localMat('#97a49a',.13,.76),'socket-'+socket.id);
-   glyph.userData.socket=socket.id;sockets.push({mesh:glyph,socket});
-  }
- }
+
+ // Nested mounts are resolved after their parent has been physically placed.
+ const worldFromNested=(socket)=>{
+  const node=objects.find(o=>o.category===socket.parent);
+  if(!node)return null;
+  root.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(node.group,true),
+   c=b.getCenter(new THREE.Vector3());
+  if(socket.parent==='cab')return [c.x,b.max.y+.04-frameY,c.z+.02];
+  // Weapon shields connect near the receiver / structural carrier,
+  // not at the tip of the barrel.
+  const p=node.group.localToWorld(new THREE.Vector3(.12,-.20,-.12));
+  return [p.x,p.y-frameY,p.z];
+ };
  const attached=[
   ...Object.entries(state.installed).filter(([,mount])=>mount)
    .map(([category,mount])=>({...mount,category})),
@@ -420,7 +425,9 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   }
   const bb=mount.category==='mobility'?mobilityBounds:actualBounds(group),
    mid=bb.getCenter(new THREE.Vector3()),
-   pt=physical.get(socket.id);
+   pt=socket.parent?worldFromNested(socket):physical.get(socket.id);
+  if(!pt)continue;
+  physical.set(socket.id,pt);
   let x=pt[0]-mid.x,y=frameY+pt[1]-mid.y,z=pt[2]-mid.z;
   if(mount.category==='combat'&&carrier!=='direct'){
    // Socket mates to the actual load-bearing shoulder pivot on the carrier.
@@ -461,8 +468,26 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   group.userData.installedSocket=socket.id;
   group.userData.rootMateWorld=[pt[0],pt[1]+frameY,pt[2]];
   root.add(group);
+  if(socket.parent){
+   const parent=objects.find(x=>x.category===socket.parent);
+   if(parent){
+    root.updateMatrixWorld(true);
+    parent.group.attach(group);
+   }
+  }
   objects.push({category:mount.category,group,socket:mount.socket,
    source:group.userData.grayboxVisualSource||'graybox'});
+ }
+ for(const socket of allSockets){
+  const pos=physical.get(socket.id)|| (socket.parent?worldFromNested(socket):null);
+  if(!pos)continue;
+  if(socketVisible||highlightCategory===socket.station){
+   const world=[pos[0],pos[1]+frameY,pos[2]];
+   const glyph=sphere(root,world,highlightCategory===socket.station?.095:.055,
+     highlightCategory===socket.station?localMat('#d3a34b',.15,.90):
+       localMat('#97a49a',.13,.76),'socket-'+socket.id);
+   glyph.userData.socket=socket.id;sockets.push({mesh:glyph,socket});
+  }
  }
  return {root,sockets,objects};
 }
