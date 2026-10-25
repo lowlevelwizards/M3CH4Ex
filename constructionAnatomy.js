@@ -275,3 +275,92 @@ export function partStowList(assembly){
     name:BY_ID.get(nodes[0]?.definitionId)?.name||'Unknown assembly'
   }));
 }
+
+/** Strict v3 blueprint restore. The slot map remains authoritative for the
+ * five existing stations; only owned anatomical nodes can be reconstructed
+ * here. Reject foreign serials, wrong-side parenting and duplicate ownership.
+ */
+export function restoreAnatomyBlueprint(assembly,anatomy,legStates){
+  if(!anatomy||!Array.isArray(anatomy.nodes)||
+      !anatomy.stowed||typeof anatomy.stowed!=='object'||Array.isArray(anatomy.stowed))
+    return {ok:false,reason:'Malformed Stage 07 anatomy payload'};
+  return transaction(assembly,()=>{
+    if(anatomy.nodes.length>12||Object.keys(anatomy.stowed).length>18)
+      throw new Error('Anatomy payload exceeds expected component count');
+    // Stage 07 default assembly is now replaced by exactly the imported nodes.
+    temporarilyStripLegs(assembly);
+    for(const side of LEG_SIDES)if(legStates[side]){
+      if(!yardLegSupported(assembly))throw new Error('Only Yardwalker supports serviceable legs');
+      const leg=ownedLeg(assembly,side);
+      addNode(assembly,leg.serial,assembly.installed.mobility,'hip-'+side);
+    }
+    if(!yardLegSupported(assembly)&&anatomy.nodes.length)
+      throw new Error('Cannot mount Yardwalker anatomy on other mobility family');
+    const seen=new Set();
+    const sorted=[...anatomy.nodes].sort((a,b)=>{
+      const da=BY_ID.get(a?.definitionId),db=BY_ID.get(b?.definitionId);
+      return ANATOMY_ORDER.indexOf(da?.section)-ANATOMY_ORDER.indexOf(db?.section);
+    });
+    for(const record of sorted){
+      const def=BY_ID.get(record?.definitionId);
+      if(def?.assemblyRole!=='anatomy'||!LEG_SIDES.includes(def.side)||
+          !legStates[def.side]||record.serial!==ownedFor(assembly,def.id)?.serial||
+          seen.has(record.serial)||!ANATOMY_ORDER.includes(def.section))
+        throw new Error('Invalid or duplicate anatomy serial');
+      const i=ANATOMY_ORDER.indexOf(def.section);
+      const parentId=i===0?YARD_LEG_IDS[def.side]:null;
+      const actualParent=i===0?ownedLeg(assembly,def.side)?.serial:
+        activeNode(assembly,def.side,ANATOMY_ORDER[i-1])?.serial;
+      if(!actualParent||record.parentSerial!==actualParent||
+          record.parentSocket!==ANATOMY_SOCKET[def.section])
+        throw new Error('Anatomy connection does not match authored parent/socket');
+      if(i===0 && !assemblyGraph(assembly).nodes[actualParent])
+        throw new Error('Leg is detached');
+      if(activeNode(assembly,def.side,def.section))
+        throw new Error('Two components occupy one anatomical station');
+      addNode(assembly,record.serial,actualParent,record.parentSocket);
+      seen.add(record.serial);
+    }
+    // Preserve parked assemblies as a constrained inventory tree, never as
+    // executable graph instructions. The validator checks all owned serials,
+    // definition IDs, tree ordering, sides and duplicates against active nodes.
+    const parked=new Set();
+    const clean={};
+    for(const [serial,nodes] of Object.entries(anatomy.stowed)){
+      if(!Array.isArray(nodes)||nodes.length<1||nodes.length>7||nodes[0]?.serial!==serial)
+        throw new Error('Malformed stored assembly branch');
+      const branch=new Set();
+      let side=null;
+      for(let i=0;i<nodes.length;i++){
+        const node=nodes[i],own=assembly.owned.find(p=>p.serial===node.serial);
+        const def=BY_ID.get(node.definitionId);
+        if(!own||own.definitionId!==node.definitionId||
+          !['leg','anatomy'].includes(def?.assemblyRole)||
+          branch.has(node.serial)||parked.has(node.serial)||
+          assemblyGraph(assembly).nodes[node.serial])
+          throw new Error('Stored anatomy conflicts with installed or unowned component');
+        if(def.side&&!side)side=def.side;
+        if(def.side!==side)throw new Error('Mixed-side stored anatomy');
+        if(i>0 && !branch.has(node.parentSerial))
+          throw new Error('Stored branch is not ordered parent-first');
+        if(i>0){
+          const parent=BY_ID.get(nodes.find(n=>n.serial===node.parentSerial)?.definitionId);
+          const expectedParent=ANATOMY_ORDER.indexOf(def.section)===0?'leg':
+            ANATOMY_ORDER[ANATOMY_ORDER.indexOf(def.section)-1];
+          if(expectedParent==='leg'?parent?.assemblyRole!=='leg':
+             parent?.section!==expectedParent)
+            throw new Error('Stored anatomy has invalid support chain');
+          if(node.parentSocket!==ANATOMY_SOCKET[def.section])
+            throw new Error('Stored anatomical socket mismatch');
+        }
+        branch.add(node.serial);parked.add(node.serial);
+      }
+      clean[serial]=nodes.map(n=>({
+        serial:n.serial,definitionId:n.definitionId,parentSerial:n.parentSerial,
+        parentSocket:n.parentSocket,rotationQuarterTurns:0
+      }));
+    }
+    assembly.labStowed=clean;
+    return {imported:true,activeNodes:seen.size,stowedBranches:Object.keys(clean).length};
+  });
+}
