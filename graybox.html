@@ -6,18 +6,18 @@
   <meta name="theme-color" content="#f3f3ee"/>
   <title>M3CH4 / Graybox Construction</title>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
-  <link rel="stylesheet" href="./graybox.css?v=g13"/>
+  <link rel="stylesheet" href="./graybox.css?v=g14"/>
 </head>
 <body>
 <header class="topbar">
   <div><div class="eyebrow">M3CH4 / EXPERIMENTAL WORKSHOP</div>
-  <h1>GRAYBOX BUILDER <span>13 / FORMS</span></h1></div>
+  <h1>GRAYBOX BUILDER <span>14 / ARCHITECTURE</span></h1></div>
   <a href="./index.html">Detailed lab ↗</a>
 </header>
 <main>
   <section class="viewer" aria-label="Graybox 3D mech preview">
     <div class="viewport-head">
-      <span>SHAPE · SOCKETS · SILHOUETTE</span>
+      <span>STRUCTURE · MOUNTS · SILHOUETTE</span>
       <button id="socket-toggle" type="button" aria-pressed="false">SHOW SOCKETS</button>
     </div>
     <div id="gb-viewport" aria-label="Orbit view, drag to rotate and pinch to zoom"></div>
@@ -35,7 +35,7 @@
     </div>
     <div class="section-head">
       <button class="tab active" data-tab="parts">BUILD</button>
-      <button class="tab" data-tab="looks">ARMOR + PAINT</button>
+      <button class="tab" data-tab="looks">FORM + FINISH</button>
       <button class="tab" data-tab="reference">10 REFS</button>
     </div>
     <section id="parts-panel" class="panel">
@@ -44,7 +44,7 @@
       <div id="choices"></div>
     </section>
     <section id="looks-panel" class="panel" hidden>
-      <p class="helper">BARE exposes the original structural machinery; ARMORED retains its production protection; ENCASED adds local protective housings around the same assembly. These are visual coverage prototypes, not extra durability yet.</p>
+      <p class="helper">Choose complete interchangeable housings, carriers, stance and foot attachments. Then add asymmetric limb plates and paint. Preview rules only: real production geometry is retained wherever possible.</p>
       <div id="appearance"></div>
     </section>
     <section id="reference-panel" class="panel" hidden>
@@ -59,10 +59,10 @@
         <button id="import">IMPORT</button>
         <input id="file" type="file" accept=".json,application/json" hidden/>
       </div>
-      <p class="disclaimer">Experimental visual builder · Existing M3CH4 combat definitions reused where available · Crawler/extra body styles are graybox prototypes, not implemented combat locomotion.</p>
+      <p class="disclaimer">Stage 14 architectural experiment · Five mandatory stations preserved · New carriers, housings, compact legs and crawler are visual construction prototypes, not live combat gameplay.</p>
     </footer>
   </aside>
 </main>
-<script type="module" src="./graybox.js?v=g13"></script>
+<script type="module" src="./graybox.js?v=g14"></script>
 </body>
 </html>
