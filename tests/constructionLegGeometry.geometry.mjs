@@ -20,7 +20,7 @@ import {buildSharedVisual,LIVE_VISUAL_IDS} from '../grayboxSharedVisual.js';
 import {recipe,BY_PART,PAINTS,defaultBuild,CATALOG,FRAMES,socketsForFrame} from '../grayboxCore.js';
 import {localSocket,mechanicalChainErrors} from '../grayboxRigging.js';
 import {buildAuditScene,AUDIT_CATEGORIES} from '../grayboxAudit.js';
-import {YARDWALKER_LAYOUT,KESTREL_LAYOUT,HAULER_LAYOUT} from '../mobilityDefinitions.js';
+import {KESTREL_LAYOUT,HAULER_LAYOUT} from '../mobilityDefinitions.js';
 
 function boundsOf(object) {
   object.updateMatrixWorld(true);
