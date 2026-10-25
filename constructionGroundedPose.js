@@ -31,7 +31,7 @@ export function groundedTargets(name){
 export function validateGrounding(g){
   const errors=[];
   if(!g||!['manual','grounded'].includes(g.mode))return {valid:false,errors:['Unknown pose control mode']};
-  if(!Number.isFinite(g.bodyDropM)||g.bodyDropM<0||g.bodyDropM>.22)errors.push('Body drop must be 0..0.22m');
+  if(!Number.isFinite(g.bodyDropM)||g.bodyDropM<0||g.bodyDropM>.32)errors.push('Body drop must be 0..0.32m');
   if(!Number.isFinite(g.bodyTravelZM)||Math.abs(g.bodyTravelZM)>.48)errors.push('Body travel exceeds demonstration envelope');
   if(!g.feet||Object.keys(g.feet).sort().join(',')!=='left,right')errors.push('Both foot contacts required');
   else for(const side of ARTICULATION_SIDES){
@@ -122,10 +122,10 @@ const smooth=t=>t*t*(3-2*t);
  * The supporting pad never chases the moving chassis. Each swing takes a
  * fixed launch/landing position and a clearance arc.
  */
-export function contactWalkFrame(t,{liftM=.10,stepDistanceM=.25,bodyDropM=.04}={}){
+export function contactWalkFrame(t,{liftM=.10,stepDistanceM=.25,bodyDropM=.04,supportDropM=0}={}){
   t=clamp(t,0,1);
   const g=groundedTargets('neutral');
-  g.bodyDropM=bodyDropM;
+  g.bodyDropM=bodyDropM+supportDropM;
   const step=(u,from,to)=>{
     const f=smooth(clamp(u,0,1));
     return {z:round(from+(to-from)*f),y:round(Math.sin(Math.PI*f)*liftM),
