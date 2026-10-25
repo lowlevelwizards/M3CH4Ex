@@ -1,3 +1,6 @@
+import {createLabMachine,labJointAction,labSectionAction,labInspection,labSectionDetails} from '../constructionLabCore.js';
+import {BY_ID,graphWorldPoses} from '../components.js';
+import {calculateArticulatedMatrices,createActiveActuator,updateActiveActuator} from '../constructionArticulationVisual.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -84,5 +87,65 @@ test('Rook S2 lower leg mates with unchanged authored knee and ankle anchors',()
     assert.ok(lower.position.distanceTo(expected)<.00001);
     let count=0;shin.traverse(o=>{if(o.isMesh)count++});
     assert.ok(count>=5);
+  }
+});
+
+function activeGeometry(machine){
+  const graph=labInspection(machine).graph;
+  const frame=BY_ID.get(machine.owned.find(p=>p.serial===machine.installed.structure)?.definitionId);
+  const poses=graphWorldPoses(graph,BY_ID,frame.center);
+  return {graph,poses,matrix:calculateArticulatedMatrices(graph,poses,machine)};
+}
+test('Stage 08 knee rotates downstream shin and foot but never its upstream thigh',()=>{
+  const rig=createLabMachine();
+  const refs=labSectionDetails(rig);
+  const left=refs.find(p=>p.side==='left').sections;
+  const right=refs.find(p=>p.side==='right').sections;
+  const before=activeGeometry(rig);
+  assert.equal(labJointAction(rig,'left','knee',60).ok,true);
+  const after=activeGeometry(rig);
+  function origin(map,serial){return new THREE.Vector3().setFromMatrixPosition(map.get(serial).matrix)}
+  assert.ok(origin(before.matrix,left.thigh.serial).distanceTo(origin(after.matrix,left.thigh.serial))<1e-7);
+  assert.ok(origin(before.matrix,left.knee.serial).distanceTo(origin(after.matrix,left.knee.serial))<1e-7);
+  assert.ok(origin(before.matrix,left.ankle.serial).distanceTo(origin(after.matrix,left.ankle.serial))>.15);
+  assert.ok(origin(before.matrix,left.foot.serial).distanceTo(origin(after.matrix,left.foot.serial))>.15);
+  assert.ok(origin(before.matrix,right.foot.serial).distanceTo(origin(after.matrix,right.foot.serial))<1e-7);
+  const anchored=origin(after.matrix,left.shin.serial),hinge=origin(after.matrix,left.knee.serial);
+  assert.ok(anchored.distanceTo(hinge)<1e-7,'shin must remain connected at knee pivot');
+});
+test('Stage 08 hip and ankle articulation move only supported descendant branches',()=>{
+  const rig=createLabMachine();
+  const parts=labSectionDetails(rig).find(p=>p.side==='left').sections;
+  const base=activeGeometry(rig);
+  assert.equal(labJointAction(rig,'left','hip',30).ok,true);
+  const hip=activeGeometry(rig);
+  const get=(map,serial)=>new THREE.Vector3().setFromMatrixPosition(map.get(serial).matrix);
+  assert.ok(get(base.matrix,parts.knee.serial).distanceTo(get(hip.matrix,parts.knee.serial))>.1);
+  assert.ok(get(base.matrix,parts.hip.serial).distanceTo(get(hip.matrix,parts.hip.serial))<1e-7);
+  assert.equal(labJointAction(rig,'left','ankle',25).ok,true);
+  const ankle=activeGeometry(rig);
+  assert.ok(get(hip.matrix,parts.foot.serial).distanceTo(get(ankle.matrix,parts.foot.serial))>.03);
+  assert.ok(get(hip.matrix,parts.ankle.serial).distanceTo(get(ankle.matrix,parts.ankle.serial))<1e-7);
+});
+test('Stage 08 two-end hydraulic actuators stay on actual thigh and shin mounts',()=>{
+  for(const variant of ['original','rook']){
+    const rig=createLabMachine();
+    if(variant==='rook')assert.equal(labSectionAction(rig,'left','shin','swap',{variant}).ok,true);
+    const actuator=createActiveActuator('left');
+    const neutral=activeGeometry(rig);
+    const start=updateActiveActuator(actuator,rig,neutral.matrix,neutral.graph,neutral.poses);
+    assert.equal(start.visible,true);
+    assert.equal(start.valid,true);
+    const neutralLength=start.lengthM;
+    assert.equal(labJointAction(rig,'left','knee',90).ok,true);
+    const bent=activeGeometry(rig);
+    const update=updateActiveActuator(actuator,rig,bent.matrix,bent.graph,bent.poses);
+    assert.ok(update.valid,variant+' stroke exceeded');
+    assert.ok(Math.abs(update.lengthM-neutralLength)>.05,variant+' actuator should telescope');
+    const upper=actuator.upperCap.position,lower=actuator.lowerCap.position;
+    assert.ok(Math.abs(upper.distanceTo(lower)-update.lengthM)<1e-7);
+    assert.ok(Math.abs(actuator.housing.scale.y-.34)<1e-6);
+    assert.ok(Math.abs(actuator.rod.scale.y-update.strokeM)<1e-6);
+    assert.equal(actuator.group.children.length,4);
   }
 });
