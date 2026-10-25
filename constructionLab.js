@@ -475,6 +475,8 @@ function renderPosePanel(){
   const metrics=[
     ['Structural connections',viability.structure?'VALID':'INVALID'],
     ['Ground contact',viability.ground?'BOTH FEET REACH':'NOT SUPPORTED'],
+    ['Resting chassis drop',viability.restingBodyDropM==null?'NOT REACHABLE':
+      Math.round(viability.restingBodyDropM*100)+' cm'],
     ['Full 15 cm crouch',viability.fullCrouch?'REACHABLE':'REQUIRES REDUCED DROP'],
     ['Two-step preview',viability.walkPreview?'REACHABLE':'LIMITED / UNREACHABLE'],
     ['Collision clearance','UNVERIFIED (BROAD PHASE ONLY)']
