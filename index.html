@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#f4f5f2"/>
   <title>M3CH4 / Universal Construction Lab</title>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
-  <link rel="stylesheet" href="./constructionLab.css?v=s08d"/>
+  <link rel="stylesheet" href="./constructionLab.css?v=s08e"/>
 </head>
 <body>
   <header class="topbar">
-    <div><div class="eyebrow">M3CH4 / EXPERIMENT</div><h1>CONSTRUCTION LAB <span>STAGE 08D</span></h1></div>
+    <div><div class="eyebrow">M3CH4 / EXPERIMENT</div><h1>CONSTRUCTION LAB <span>STAGE 08E</span></h1></div>
     <div class="top-actions">
       <button id="reset" type="button" title="Restore a stock test rig">Reset rig</button>
       <a href="https://lowlevelwizards.github.io/M3CH4/" title="Open the production game">LIVE M3CH4 ↗</a>
@@ -41,7 +41,7 @@
         <button data-tab="pose" aria-pressed="false">POSE</button>
       </div>
       <section id="catalog-panel" class="panel">
-        <p class="explain">Select POSE for planted crouch and two-step motion derived from the live game. Manual joints and interchangeable Rook S2 shins remain available.</p>
+        <p class="explain">Select MOBILITY to mix original, Rook S2 and 160 mm extended Pylon L1 shins; POSE checks whether the assembled machine can stand, crouch and step.</p>
         <div id="slots" class="slot-row" aria-label="Assembly type"></div>
         <div id="catalog" class="catalog-list"></div>
       </section>
@@ -54,7 +54,7 @@
         <div id="inspection"></div>
       </section>
       <section id="pose-panel" class="panel" hidden>
-        <p class="explain">Grounded movement now uses the live M3CH4 leg IK: planted-foot crouches and committed steps. Manual joint inspection remains available below.</p>
+        <p class="explain">The solver now derives reach from installed thigh and shin sockets. Crouch and gait travel may be limited for mismatched leg lengths; inspect construction viability below.</p>
         <div id="pose-controls"></div>
       </section>
       <footer class="sidebar-foot">
@@ -65,6 +65,6 @@
       </footer>
     </aside>
   </main>
-  <script type="module" src="./constructionLab.js?v=s08d"></script>
+  <script type="module" src="./constructionLab.js?v=s08e"></script>
 </body>
 </html>
