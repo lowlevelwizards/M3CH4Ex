@@ -155,3 +155,20 @@ To remove the machine, tap **REMOVE COMPLETE MANIPULATOR**: the entire five-comp
 **Test boundary:** This is a constrained five-component installation at an authored utility mount, not an arbitrary universal socket-layout editor. Current graphical articulation demonstrates one-axis rotary pivots and two-ended linear actuators; ball joints, prismatic joints, triaxial IK, dynamic loads, and exact swept-volume collision are not implemented. Frame swaps require detaching a dependent manipulator first; unrelated station changes park and restore its exact serials. Live M3CH4 is not modified.
 
 **Compatibility:** new exports use **v9**. Existing v1–v8 lab blueprints continue importing without a manipulator.
+
+## Stage 12 — Fundamental Graybox Construction (independent mode)
+
+**[Open the graybox builder](https://lowlevelwizards.github.io/M3CH4Ex/graybox.html)** · [Open the original detailed lab](https://lowlevelwizards.github.io/M3CH4Ex/)
+
+This is an intentional **breadth-first reset of visual construction**, *not* deletion of existing Stage 07–11 component work. The independent `graybox.html` experiment shares **actual existing production catalogue IDs** for its three original frames, three cabs, three mobility systems, five guns and three generators. It defines just three additional foundational visual prototypes: a narrow SPAR frame, bubble canopy and low four-point crawler. The latter is **not a playable, animated locomotion implementation**.
+
+Five mandatory stations remain enforced: **FRAME, CAB, COMBAT, MOBILITY, POWER**. A separate optional support family comprises manipulator, camera pod, plate shield, cooler, ammo box and light mast. Frame sockets are authored and carry category, position, orientation role and individual load capacity. Cab placement is explicitly front/top limited by physical style; weapons can occupy permitted left/right/top locations. Support parts can only mount to compatible available auxiliary nodes, independent of mandatory Combat.
+
+Starter coverage: 4 frames; 4 cabs; 4 mobility silhouettes; 5 live-catalog combat guns; 3 live-catalog generators; 6 auxiliary types. Parts are complete replaceable assemblies; detailed joints and servicing remain accessible in the legacy lab, rather than being forced into this graybox.
+
+The workshop provides tap-to-pick compatible socket markers, equally accessible named-socket buttons, constrained reparenting on frame changes (with displaced modules reported), load and generator demand indicators, minimal armored/bare configurations, per-assembly palette overrides, touch orbit/zoom, and independent version 1 JSON save/import plus local device persistence.
+
+**Reference acceptance challenge:** ten different starter mechs inspired by the reference image board are recipes using exclusively this small shared set. Tests check required stations, authored attachment compatibility, structural mass, power availability, input validity and recipe roundtripping. They do not assert these are exact recreations. Current geometry is intentionally primitive: large forms first, design polish later.
+
+**Boundaries:** The experimental four-point crawler, SPAR frame, bubble cab and six support items are silhouette prototypes. Their physics, balancing, damage, operation and production save compatibility are *not* implemented. The original detailed Stage 11 lab and live M3CH4 combat game are preserved unchanged. Integrating any accepted prototype into the gameplay builder remains a separate verified stage.
+
