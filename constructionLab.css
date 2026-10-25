@@ -12,3 +12,18 @@ aside{display:flex;flex-direction:column;width:min(340px,34vw);min-height:0;back
 .card{background:#fff;border:1px solid #d4ddd4;border-radius:9px;padding:13px;margin:6px 0 12px;font-size:12px;line-height:1.55}.card h2{font-size:14px;margin:0 0 8px}.card .meta{color:#64766a;font-size:11px}.card strong{color:#334b40}.card p{margin:7px 0}.metric{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e7ede7}.metric:last-child{border:0}
 .sidebar-foot{border-top:1px solid #d7ddd6;padding:11px 13px;background:#fff}#stats{font-size:10px;font-weight:800;letter-spacing:.07em}#verdict{font-size:10px;color:#517361;min-height:27px;padding:7px 0}#verdict.error{color:#ae4b3c}.io-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 @media(max-width:730px){.topbar{height:57px;padding:7px 11px}.topbar h1{font-size:13px}main{height:calc(100dvh - 57px);flex-direction:column}#stage{min-height:200px;flex:1 1 55%}aside{width:100%;border-left:0;border-top:1px solid #d9dfd8;flex:1 1 45%;min-height:218px}.panel{padding:9px 12px}.tabbar{padding:5px 10px 0}.stage-tools{bottom:53px}.stage-tools button{font-size:9px;min-height:32px;padding:7px 8px}.stage-foot{bottom:4px;padding:4px 8px;min-height:36px}.stage-foot label{font-size:10px} .sidebar-foot{padding:6px 10px}#stats{font-size:9px}#verdict{padding:3px 0;min-height:18px} .io-row button{min-height:29px;padding:5px}}
+/* Stage 08: compact mechanical tuning controls, finger-friendly on phones. */
+.pose-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pose-presets button{min-height:34px;padding:6px 5px;font-size:10px}
+.joint-control{border-top:1px solid #dce3dc;padding:9px 0 7px}
+.joint-control:first-of-type{border-top:0}
+.joint-control input[type=range]{display:block;width:100%;min-height:28px;touch-action:pan-y;accent-color:#438177;cursor:ew-resize}
+.joint-control .metric{border-bottom:0;padding:3px 0}
+.joint-control .meta{margin:3px 0 0;color:#7c8880}
+#pose-diagnostics .metric{font-size:10px}
+#pose-diagnostics .meta{margin-top:7px}
+@media(max-width:730px){
+ .tabbar button{font-size:9px;padding:8px 2px;min-height:34px}
+ .pose-presets button{min-height:38px}
+ .joint-control input[type=range]{min-height:38px}
+}
