@@ -54,7 +54,11 @@ function save(){
 function refreshStage(){
  if(body){scene.remove(body);body.traverse(o=>{
   if(o.geometry)o.geometry.dispose();
-  if(o.material&&!Array.isArray(o.material)&&o.material.userData?.localDispose)o.material.dispose();
+  const mats=Array.isArray(o.material)?o.material:[o.material];
+  for(const material of mats){
+   if(material?.userData?.grayboxOwned||material?.userData?.finishOrigin)
+    material.dispose();
+  }
  });}
  const result=buildGrayboxScene(model,{socketVisible,
    highlightCategory:pending?.category,highlightPart:pending?.id});
@@ -207,7 +211,7 @@ function renderAppearance(){
   const wrap=document.createElement('div');wrap.className='armor-row';
   const label=document.createElement('strong');label.textContent=cat.toUpperCase();
   wrap.append(label);
-  for(const [value,name] of [[0,'BARE'],[1,'LIGHT'],[2,'FULL']]){
+  for(const [value,name] of [[0,'BARE'],[1,'ARMOR'],[2,'ENCASED']]){
    const b=button(name,()=>{
     model.armor[cat]=value;save();renderPanels();refreshStage();
    },{active:model.armor[cat]===value});
