@@ -8,7 +8,9 @@ import { SHARED_PART_IDS, buildPartVisual } from './partVisuals.js';
 import { buildFitFixture } from './chassisFitVisuals.js';
 import { fitFixtureFor } from './chassisFitFixtures.js';
 import { rotatedY } from './assemblyGraph.js';
-import { extractYardwalkerLeg, extractYardwalkerAnatomy, buildRookSparShin, buildPylonExtendedShin } from './yardwalkerVisual.js';
+import { extractYardwalkerLeg, extractYardwalkerAnatomy, buildRookSparShin,
+  buildPylonExtendedShin,buildForgeCompactThigh,buildDockpadStabilizerFoot
+} from './yardwalkerVisual.js';
 import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,PRESET_NAMES,articulationReport} from './constructionArticulation.js';
 import {applyArticulatedModels,createActiveActuator,updateActiveActuator,coarseClearanceHints} from './constructionArticulationVisual.js';
 import {
@@ -88,33 +90,41 @@ function renderCatalog(){
   });
   if(selectedSlot==='mobility'){
     const workbench=document.createElement('section');workbench.className='card';
-    const title=document.createElement('h2');title.textContent='STAGE 08E / VARIABLE GEOMETRY';
+    const title=document.createElement('h2');title.textContent='STAGE 09 / MIXED ANATOMY';
     workbench.append(title);
     const note=document.createElement('p');note.className='meta';
     note.textContent=installed==='legs-yard'
-      ?'Shin variants now have independent knee-to-ankle lengths. Try one extended Pylon L1 leg, then inspect the stance and reach report.'
+      ?'Open either leg below to swap thigh, shin and foot independently. Compatibility and downstream connections are validated as one operation.'
       :'Serviceable anatomy is authored for Yardwalker only. Choose Yardwalker above to test.';
     workbench.append(note);
+    const variants={
+      thigh:[['original','STOCK'],['compact','FORGE T2 · SHORT']],
+      shin:[['original','STOCK'],['rook','ROOK S2'],['extended','PYLON L1 · LONG']],
+      foot:[['original','STOCK'],['stabilizer','DOCKPAD F2 · WIDE']]
+    };
     for(const leg of labLegDetails(machine)){
-      const b=button(leg.side.toUpperCase()+' · '+(leg.installed?'DETACH':'INSTALL'),
+      const wrap=document.createElement('details');wrap.className='leg-builder';
+      wrap.open=leg.side==='left';workbench.append(wrap);
+      const label=document.createElement('summary');
+      label.textContent=leg.side.toUpperCase()+' LEG · '+(leg.installed?'ASSEMBLED':'DETACHED');
+      wrap.append(label);
+      const b=button(leg.installed?'DETACH COMPLETE LEG':'REINSTALL COMPLETE LEG',
         ()=>doLegAction(leg.side,leg.installed?'detach':'attach'));
-      b.disabled=installed!=='legs-yard';
-      b.style.width='100%';b.style.marginBottom='6px';workbench.append(b);
+      b.disabled=installed!=='legs-yard';b.style.width='100%';b.style.margin='6px 0';wrap.append(b);
       const check=labSectionDetails(machine).find(x=>x.side===leg.side);
-      if(leg.installed&&check){
-        const shin=check.sections.shin;
-        const variants=[['original','YARDWALKER'],['rook','ROOK S2'],['extended','PYLON L1 · +160 MM']];
-        const div=document.createElement('p');div.className='meta';
-        div.textContent=leg.side.toUpperCase()+' / ACTIVE '+(shin.variant||'UNINSTALLED').toUpperCase();
-        workbench.append(div);
-        for(const [variant,label] of variants){
-          const t=button((shin.variant===variant?'✓ ':'')+label,()=>{
-            if(shin.variant===variant)return;
-            doSectionAction(leg.side,'shin',shin.installed?'swap':'attach',{variant});
+      if(leg.installed&&check)for(const [section,choices] of Object.entries(variants)){
+        const current=check.sections[section];
+        const row=document.createElement('div');row.className='leg-variants';
+        const heading=document.createElement('strong');heading.textContent=section.toUpperCase();
+        row.append(heading);
+        for(const [variant,name] of choices){
+          const t=button((current.variant===variant?'✓ ':'')+name,()=>{
+            if(current.variant===variant)return;
+            doSectionAction(leg.side,section,current.installed?'swap':'attach',{variant});
           });
-          t.disabled=shin.variant===variant;
-          t.style.marginRight='5px';t.style.marginBottom='7px';workbench.append(t);
+          t.disabled=current.variant===variant;row.append(t);
         }
+        wrap.append(row);
       }
     }
     catalog.prepend(workbench);
@@ -159,10 +169,10 @@ function showTree(){
       const part=own(entry.serial),def=BY_ID.get(part?.definitionId);
       if(def?.assemblyRole==='anatomy'){
         const active=labSectionDetails(machine).find(x=>x.side===def.side)?.sections?.[def.section];
-        const replacing=def.section==='shin'&&active?.installed;
+        const replacing=!!active?.installed&&active.id!==def.id;
         const select=button((replacing?'SWAP TO ':'INSTALL ')+
-          (def.variant==='rook'?'ROOK S2 ':def.section.toUpperCase()+' ')+
-          '· '+def.side.toUpperCase(),
+          (def.variant==='original'?'ORIGINAL ':def.variant.toUpperCase()+' ')+
+          def.section.toUpperCase()+' · '+def.side.toUpperCase(),
           ()=>doSectionAction(def.side,def.section,replacing?'swap':'attach',{variant:def.variant}));
         select.style.width='100%';select.style.marginBottom='5px';tray.append(select);
       }else if(def?.assemblyRole==='leg'){
@@ -667,8 +677,13 @@ function buildModels(){
     } else if(def?.assemblyRole==='anatomy'){
       if(!anatomyVisuals?.[def.side])
         throw new Error('No source Yardwalker anatomy available');
-      model=def.variant==='rook'?buildRookSparShin(def.side):
-        def.variant==='extended'?buildPylonExtendedShin(def.side,def.mechanical.ankleReceiver):
+      model=def.section==='shin'&&def.variant==='rook'?buildRookSparShin(def.side):
+        def.section==='shin'&&def.variant==='extended'?
+          buildPylonExtendedShin(def.side,def.mechanical.ankleReceiver):
+        def.section==='thigh'&&def.variant==='compact'?
+          buildForgeCompactThigh(def.side,def.mechanical.kneeReceiver):
+        def.section==='foot'&&def.variant==='stabilizer'?
+          buildDockpadStabilizerFoot(def.side,def.mechanical.groundContactDropM):
         anatomyVisuals[def.side][def.section];
       if(!model)throw new Error('Missing original '+def.side+' '+def.section+' geometry');
     } else model=def?makeVisual(def):makeAdapterVisual(node);
