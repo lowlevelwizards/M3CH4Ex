@@ -53,6 +53,11 @@ export function posePreset(name){
 export function jointLimitsFor(assembly,side,joint){
   if(joint!=='knee'||!assembly?.owned)return JOINT_LIMITS[joint];
   const bearing=installedDevice(assembly,side,'bearing');
+  if(!bearing&&!installedSection(assembly,side,'knee'))
+    // Detached or temporarily stripped limbs may keep a saved joint pose.
+    // The absent structure is handled by mobility readiness, not by
+    // pretending a service operation corrupts the entire assembly.
+    return JOINT_LIMITS.knee;
   return bearing?.definition.range||{min:0,max:0,axis:'x',
     description:'Rotary bearing removed'};
 }
