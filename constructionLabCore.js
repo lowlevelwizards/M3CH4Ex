@@ -7,13 +7,17 @@ import {
   setGeneratorMount, generatorMount, validateGraph
 } from './components.js';
 import {
-  LEG_SIDES, YARD_LEG_IDS, YARD_LEG_KG, YARD_CARRIAGE_KG,
-  attachYardLeg,detachYardLeg,installedLeg,yardLegSupported,
-  captureLegInstallations,removeLegNodesForLegacyOperation,restoreLegInstallations,
-  effectiveLabMassKg,legReadiness
+  LEG_SIDES, YARD_LEG_IDS, YARD_LEG_KG,
+  installedLeg,yardLegSupported,captureLegInstallations
 } from './constructionLegs.js';
+import {
+  ANATOMY_ORDER,anatomyId,sectionStatus,anatomyReadiness,rigAnatomyMass,
+  installDefaultAnatomy,detachAnatomyBranch,installAnatomyBranch,swapShin,
+  detachWholeLeg,restoreWholeLeg,temporarilyStripLegs,reinstateLegs,partStowList,
+  restoreAnatomyBlueprint
+} from './constructionAnatomy.js';
 
-export const LAB_BLUEPRINT_VERSION=2;
+export const LAB_BLUEPRINT_VERSION=3;
 export const LAB_SLOTS=Object.freeze([...SLOTS]);
 export const LAB_PARTS=Object.freeze([...BY_ID.values()]);
 export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'});
@@ -21,7 +25,7 @@ export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'
 export function createLabMachine(){
   const machine=makeTestAssembly();
   for(const side of LEG_SIDES){
-    const result=attachYardLeg(machine,side);
+    const result=restoreWholeLeg(machine,side);
     if(!result.ok)throw new Error('Could not assemble '+side+' leg: '+result.reason);
   }
   return machine;
@@ -31,9 +35,10 @@ export function labInspection(assembly){
   const graph=assemblyGraph(assembly);
   const graphCheck=validateGraph(graph,assembly,BY_ID);
   const rawCheck=inspectAssembly(assembly);
-  const mobility=legReadiness(assembly);
+  const legs=LEG_SIDES.filter(side=>installedLeg(assembly,side)).length;
+  const mobility={legs,complete:anatomyReadiness(assembly)};
   const machineCheck={...rawCheck,
-    massKg:effectiveLabMassKg(assembly,rawCheck.massKg),
+    massKg:rigAnatomyMass(assembly,rawCheck.massKg),
     ready:rawCheck.ready&&mobility.complete};
   return {graph,graphCheck,machineCheck,mobility,
     valid:graphCheck.valid,ready:machineCheck.ready};
@@ -51,7 +56,7 @@ export function labEquip(assembly,slot,definitionId){
   const snapshot=structuredClone(assembly);
   try {
     const previousLegs=captureLegInstallations(assembly);
-    if(yardLegSupported(assembly))removeLegNodesForLegacyOperation(assembly);
+    if(yardLegSupported(assembly))temporarilyStripLegs(assembly);
     if(prior==='offset') {
       const reset=setGeneratorMount(assembly,'standard');
       if(!reset.ok) throw new Error(reset.reason);
@@ -65,7 +70,7 @@ export function labEquip(assembly,slot,definitionId){
     }
     // A newly installed Yardwalker receives both of its owned legs by default.
     // Otherwise restore exactly the prior left/right detach state.
-    restoreLegInstallations(assembly,
+    reinstateLegs(assembly,
       slot==='mobility'&&definitionId==='legs-yard'&&!yardLegSupported(snapshot)
         ? {left:true,right:true} : previousLegs);
     const final=labInspection(assembly);
@@ -82,10 +87,10 @@ export function labSetGeneratorMount(assembly,position){
   const snapshot=structuredClone(assembly);
   try {
     const installed=captureLegInstallations(assembly);
-    if(yardLegSupported(assembly))removeLegNodesForLegacyOperation(assembly);
+    if(yardLegSupported(assembly))temporarilyStripLegs(assembly);
     const result=setGeneratorMount(assembly,position);
     if(!result.ok)throw new Error(result.reason);
-    restoreLegInstallations(assembly,installed);
+    reinstateLegs(assembly,installed);
     return {ok:true,position};
   }catch(error){
     Object.keys(assembly).forEach(key=>delete assembly[key]);
@@ -97,13 +102,27 @@ export function labLegAction(assembly,side,action){
   if(!LEG_SIDES.includes(side))return {ok:false,reason:'Unknown hip side'};
   if(!['attach','detach'].includes(action))return {ok:false,reason:'Unknown leg action'};
   const snapshot=structuredClone(assembly);
-  const result=action==='attach'?attachYardLeg(assembly,side):detachYardLeg(assembly,side);
+  const result=action==='attach'?restoreWholeLeg(assembly,side):detachWholeLeg(assembly,side);
   if(!result.ok || !labInspection(assembly).valid){
     Object.keys(assembly).forEach(key=>delete assembly[key]);
     Object.assign(assembly,snapshot);
     return {ok:false,reason:result.reason||'Resulting assembly is invalid'};
   }
   return result;
+}
+export function labSectionDetails(assembly){
+  return LEG_SIDES.map(side=>sectionStatus(assembly,side));
+}
+export function labStowed(assembly){return partStowList(assembly);}
+export function labSectionAction(assembly,side,section,action,options={}){
+  if(!LEG_SIDES.includes(side)||!ANATOMY_ORDER.includes(section))
+    return {ok:false,reason:'Unknown anatomical section'};
+  if(action==='detach')return detachAnatomyBranch(assembly,side,section,
+    {cascade:!!options.cascade});
+  if(action==='attach')return installAnatomyBranch(assembly,side,section,
+    {variant:options.variant||'original'});
+  if(action==='swap'&&section==='shin')return swapShin(assembly,side,options.variant||'rook');
+  return {ok:false,reason:'Unsupported anatomical operation'};
 }
 export function labLegDetails(assembly){
   return LEG_SIDES.map(side=>{
@@ -123,10 +142,16 @@ export function labBlueprint(assembly){
   }
   return {format:'m3ch4-construction-lab',version:LAB_BLUEPRINT_VERSION,
     stations,generatorMount:generatorMount(assembly),
-    legs:Object.fromEntries(LEG_SIDES.map(side=>[side,installedLeg(assembly,side)]))};
+    legs:Object.fromEntries(LEG_SIDES.map(side=>[side,installedLeg(assembly,side)])),
+    anatomy:{
+      nodes:Object.values(inspection.graph.nodes)
+        .filter(node=>BY_ID.get(node.definitionId)?.assemblyRole==='anatomy')
+        .map(n=>({...n})),
+      stowed:structuredClone(assembly.labStowed||{})
+    }};
 }
 export function loadLabBlueprint(input){
-  if(!input||input.format!=='m3ch4-construction-lab'||![1,LAB_BLUEPRINT_VERSION].includes(input.version)
+  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,LAB_BLUEPRINT_VERSION].includes(input.version)
     ||!input.stations||typeof input.stations!=='object'
     ||Object.keys(input.stations).some(k=>!LAB_SLOTS.includes(k)))
       throw new Error('Unsupported or invalid lab blueprint.');
@@ -146,11 +171,16 @@ export function loadLabBlueprint(input){
   if(input.version>=2){
     if(!input.legs||LEG_SIDES.some(side=>typeof input.legs[side]!=='boolean'))
       throw new Error('Blueprint requires explicit left and right leg states.');
-    if(yardLegSupported(machine))for(const side of LEG_SIDES) {
-      const r=labLegAction(machine,side,input.legs[side]?'attach':'detach');
-      if(!r.ok)throw new Error(r.reason);
-    } else if(LEG_SIDES.some(side=>input.legs[side]))
-      throw new Error('Only Yardwalker hips currently support independent legs.');
+    if(input.version===2){
+      if(yardLegSupported(machine))for(const side of LEG_SIDES) {
+        const r=labLegAction(machine,side,input.legs[side]?'attach':'detach');
+        if(!r.ok)throw new Error(r.reason);
+      } else if(LEG_SIDES.some(side=>input.legs[side]))
+        throw new Error('Only Yardwalker hips currently support independent legs.');
+    } else {
+      const restored=restoreAnatomyBlueprint(machine,input.anatomy,input.legs);
+      if(!restored.ok)throw new Error(restored.reason);
+    }
   }
   const result=labInspection(machine);
   if(!result.valid)throw new Error(result.graphCheck.errors.join(' '));
