@@ -817,3 +817,30 @@ test('Stage 11 rejects over-rated, missing or duplicate link hardware atomically
  assert.equal(labManipulatorAction(rig,'pose',{angle:999}).ok,false);
  assert.equal(labManipulatorDetails(rig).bearingSerial,arm.bearingSerial);
 });
+
+test('Stage 11 generator offset change parks and restores arm without losing hinge command',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:12}).ok,true);
+ const prior=labManipulatorDetails(rig);
+ const result=labSetGeneratorMount(rig,'offset');
+ assert.equal(result.ok,true,result.reason);
+ const after=labManipulatorDetails(rig);
+ assert.equal(after.attached,true);
+ assert.equal(after.bearingSerial,prior.bearingSerial);
+ assert.equal(after.actuatorSerial,prior.actuatorSerial);
+ assert.equal(after.angle,12);
+ assert.equal(labInspection(rig).graphCheck.valid,true);
+});
+test('Stage 11 direct frame swaps with dependent attached arm must be explicit',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ const original=labBlueprint(rig);
+ const rejected=labEquip(rig,'structure','frame-utility');
+ assert.equal(rejected.ok,false);
+ assert.deepEqual(labBlueprint(rig),original);
+ assert.equal(labManipulatorAction(rig,'remove').ok,true);
+ assert.equal(labEquip(rig,'structure','frame-utility').ok,true);
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ assert.equal(labManipulatorDetails(rig).attached,true);
+});
