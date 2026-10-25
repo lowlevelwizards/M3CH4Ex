@@ -17,7 +17,10 @@ import {extractYardwalkerLeg,extractYardwalkerAnatomy,buildRookSparShin,
 import {YARDWALKER_LAYOUT} from '../mobilityDefinitions.js';
 import {buildGrayboxScene,visualFor} from '../grayboxVisual.js';
 import {buildSharedVisual,LIVE_VISUAL_IDS} from '../grayboxSharedVisual.js';
-import {recipe,BY_PART,PAINTS,defaultBuild} from '../grayboxCore.js';
+import {recipe,BY_PART,PAINTS,defaultBuild,CATALOG,FRAMES,socketsForFrame} from '../grayboxCore.js';
+import {localSocket,mechanicalChainErrors} from '../grayboxRigging.js';
+import {buildAuditScene,AUDIT_CATEGORIES} from '../grayboxAudit.js';
+import {YARDWALKER_LAYOUT,KESTREL_LAYOUT,HAULER_LAYOUT} from '../mobilityDefinitions.js';
 
 function boundsOf(object) {
   object.updateMatrixWorld(true);
@@ -601,4 +604,98 @@ test('Stage 14 one-sided protective plating and paint produce real asymmetrical 
  assert.ok(names.includes('left independent thigh armor'));
  assert.ok(names.includes('left independent shin armor'));
  assert.ok(!names.includes('right independent shin armor'));
+});
+
+test('Stage 15 all 29 catalogue assemblies can be inspected bare, armored and encased on a physical input datum',()=>{
+ let inspected=0;
+ for(const category of AUDIT_CATEGORIES)for(const part of CATALOG[category]){
+  for(const level of [0,1,2]){
+   const audit=buildAuditScene(category,part.id,{
+    main:PAINTS.mustard,secondary:PAINTS.charcoal,accent:PAINTS.cream
+   },level);
+   const group=audit.objects[0].group;
+   assert.ok(group.getObjectByName('input mating receiver visual'),
+    part.id+' lacks inspected input mating receiver');
+   const box=boundsOf(group);
+   assert.ok(!box.isEmpty()&&box.getSize(new THREE.Vector3()).length()>.15,part.id);
+   assert.ok(Math.abs(box.min.y)<.6,part.id+' part should sit near inspection ground plane');
+   inspected++;
+  }
+ }
+ assert.equal(inspected,29*3);
+ const trio=buildAuditScene('cab','cab-armored',{
+  main:PAINTS.safety,secondary:PAINTS.rust,accent:PAINTS.cream
+ },1,true);
+ assert.deepEqual(trio.objects.map(x=>x.coverage),[0,1,2]);
+ assert.ok(boundsOf(trio.root).getSize(new THREE.Vector3()).x>2);
+});
+test('Stage 15 arms form physically continuous shoulder-to-elbow-to-wrist-to-claw chains',()=>{
+ const types=['support-arm','support-arm-light','support-arm-heavy'],
+  paint={main:PAINTS.mustard,secondary:PAINTS.teal,accent:PAINTS.cream};
+ for(const id of types){
+  const a=visualFor('support',BY_PART.get(id),paint);
+  const chain=a.userData.mechanicalChain;
+  assert.equal(chain.length,3,id+' must have three attached links');
+  assert.deepEqual(mechanicalChainErrors(chain),[],id+' has disconnected endpoints');
+  const wrist=a.getObjectByName('actual wrist/end-effector socket');
+  assert.ok(wrist,id+' missing wrist parent');
+  assert.equal(wrist.children.filter(x=>x.name?.includes('attached service gripper jaw')).length,2);
+  assert.ok(wrist.position.distanceTo(new THREE.Vector3(...a.userData.wristLocal))<.00001);
+  assert.ok(a.getObjectByName('structural arm mounting bracket'));
+ }
+});
+test('Stage 15 weapon mounts preserve structurally different elevated vs articulated load paths',()=>{
+ const rig=defaultBuild();
+ rig.form.carrier='offset';
+ let gun=buildGrayboxScene(rig).objects.find(x=>x.category==='combat').group;
+ assert.ok(gun.getObjectByName('offset mast steel column'));
+ assert.equal(gun.getObjectByName('carrier distal arm'),undefined,
+  'High pintle cannot secretly contain a hanging forearm');
+ rig.form.carrier='heavy';
+ gun=buildGrayboxScene(rig).objects.find(x=>x.category==='combat').group;
+ assert.ok(gun.getObjectByName('carrier distal arm'));
+ const shield=gun.getObjectByName('weapon-shield-mate');
+ assert.ok(shield,'Weapon shields must have actual carrier-local mounting face');
+});
+test('Stage 15 sockets have fixed frame steel datums independent of housing appearance',()=>{
+ for(const frame of FRAMES){
+  const slots=socketsForFrame(frame.id);
+  for(const socket of slots){
+   const datum=localSocket(frame,socket);
+   assert.ok(datum.every(Number.isFinite));
+   assert.ok(Math.abs(datum[0])<frame.size[0]*.9);
+  }
+  const noArmor=defaultBuild();noArmor.frame=frame.id;
+  noArmor.form.housing='none';noArmor.armor.frame=0;
+  const a=buildGrayboxScene(noArmor);
+  noArmor.form.housing='angular';noArmor.armor.frame=2;
+  const b=buildGrayboxScene(noArmor);
+  const ar=a.objects.find(x=>x.category==='combat').group.userData.rootMateWorld;
+  const br=b.objects.find(x=>x.category==='combat').group.userData.rootMateWorld;
+  assert.deepEqual(ar,br,frame.id+' weapon hardpoint drifted after installing a hull');
+ }
+});
+test('Stage 15 true mobility anchor-based toe gear follows original installed boot centrelines',()=>{
+ const rigs=[['legs-yard',YARDWALKER_LAYOUT],
+   ['legs-compact',KESTREL_LAYOUT],['legs-hauler',HAULER_LAYOUT]];
+ for(const [id,layout] of rigs){
+  const rig=defaultBuild();rig.installed.mobility.id=id;
+  rig.form.feet='claw';rig.limbPlating={left:2,right:0};
+  const group=buildGrayboxScene(rig).objects.find(x=>x.category==='mobility').group;
+  for(const leg of layout.legs){
+   const toe=group.getObjectByName('split replaceable toe '+leg.side+' / -1');
+   assert.ok(toe,id+' missing foot-linked toe');
+   assert.ok(Math.abs(toe.position.x-leg.foot[0])<layout.footSize[0],
+    id+' toe not under real foot');
+  }
+  assert.ok(group.getObjectByName('left independent shin armor'));
+ }
+});
+test('Stage 15 drum now wraps the central body vertically and is not a large frontal disc',()=>{
+ const rig=recipe(8),frame=buildGrayboxScene(rig).objects.find(x=>x.category==='frame').group;
+ const drum=frame.getObjectByName('cylindrical protective drum');
+ assert.ok(drum);
+ assert.ok(Math.abs(drum.rotation.x)<.01,'Drum should have a true vertical body axis');
+ assert.ok(frame.getObjectByName('drum lateral mounting lug -1'));
+ assert.ok(frame.getObjectByName('circular access hatch'));
 });
