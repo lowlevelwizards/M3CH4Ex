@@ -53,12 +53,15 @@ export function posePreset(name){
 export function jointLimitsFor(assembly,side,joint){
   if(joint!=='knee'||!assembly?.owned)return JOINT_LIMITS[joint];
   const bearing=installedDevice(assembly,side,'bearing');
-  return bearing?.definition.range||JOINT_LIMITS.knee;
+  return bearing?.definition.range||{min:0,max:0,axis:'x',
+    description:'Rotary bearing removed'};
 }
 export function jointWorkingRange(assembly,side,joint){
   const bearing=jointLimitsFor(assembly,side,joint);
   if(joint!=='knee'||!assembly?.owned)return {...bearing,powered:true,limiter:'joint'};
-  const drive=installedDevice(assembly,side,'actuator');
+  const rotor=installedDevice(assembly,side,'bearing'),
+    drive=installedDevice(assembly,side,'actuator');
+  if(!rotor)return {...bearing,powered:false,limiter:'rotary bearing absent'};
   if(!drive||!deviceBinding(assembly,side))
     return {...bearing,powered:false,limiter:'actuator absent'};
   const angles=[];
@@ -172,6 +175,8 @@ export function articulationReport(assembly){
     if(!test.valid)errors.push(side+' '+test.mechanism+' exceeds physical stroke at '+angle+'°');
   }
   return {valid:errors.length===0,errors,warnings,stroke,range,
-    powered:stroke.every(item=>item.valid),
+    powered:stroke.every(item=>item.valid)&&
+      ARTICULATION_SIDES.every(side=>!assembly?.owned||
+        !!installedDevice(assembly,side,'bearing')),
     collisionStatus:'Conservative clearance hints, not swept-mesh contact'};
 }
