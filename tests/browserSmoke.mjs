@@ -104,6 +104,18 @@ try{
  assert.deepEqual(errors,[],'New Bubble/Cradle recipe browser errors');
  await page.locator('[data-tab="looks"]').click();
  assert.equal(await page.locator('select[data-form="stance"]').inputValue(),'low');
+ // Validate player-facing nested weapon sockets and independently plated legs.
+ await page.locator('[data-tab="reference"]').click();
+ await page.getByRole('button',{name:/01 \/ YELLOW UTILITY/}).click();
+ await page.locator('[data-tab="parts"]').click();
+ await page.getByRole('button',{name:'SUPPORT',exact:true}).click();
+ await page.getByRole('button',{name:/SHIELD \/ Impact Plate/i}).click();
+ await page.getByRole('button',{name:/WEAPON CARRIER PROTECTION/i}).click();
+ assert.match(await page.locator('#choices').innerText(),/weapon-shield/i);
+ await page.locator('[data-tab="looks"]').click();
+ const leftLeg=page.locator('#appearance .armor-row').filter({hasText:'LEFT LEG'});
+ await leftLeg.getByRole('button',{name:'FULL'}).click();
+ assert.deepEqual(errors,[],'Nested equipment and asymmetric limb browser errors');
  console.log('STAGE14_FORMS',JSON.stringify(selected));
  console.log('GRAYBOX_BROWSER_SMOKE_OK');
  console.log('BROWSER_SMOKE_OK');
