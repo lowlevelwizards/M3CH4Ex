@@ -434,6 +434,12 @@ export function loadLabBlueprint(input){
       if(!restored.ok)throw new Error(restored.reason);
     }
   }
+  if(input.version>=8){
+    const loaded=restoreMechanisms(machine,input.mechanisms);
+    if(!loaded.ok)throw new Error(loaded.reason);
+  }else if(yardLegSupported(machine)){
+    for(const side of LEG_SIDES)reconnectDevices(machine,side);
+  }
   if(input.version>=4){
     const tested=validatePose(input.pose);
     if(!tested.valid)throw new Error(tested.errors.join('; '));
@@ -454,12 +460,6 @@ export function loadLabBlueprint(input){
           throw new Error('Grounded foot targets disagree with stored joint positions');
     }
     machine.labGrounding=structuredClone(input.grounding);
-  }
-  if(input.version>=8){
-    const loaded=restoreMechanisms(machine,input.mechanisms);
-    if(!loaded.ok)throw new Error(loaded.reason);
-  }else if(yardLegSupported(machine)){
-    for(const side of LEG_SIDES)reconnectDevices(machine,side);
   }
   const result=labInspection(machine);
   if(!result.valid)throw new Error(result.graphCheck.errors.concat(
