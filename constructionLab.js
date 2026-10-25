@@ -527,6 +527,7 @@ function switchTab(which){
   currentTab=which;
   document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===which)));
   for(const tab of ['catalog','tree','inspect','pose'])$(tab+'-panel').hidden=which!==tab;
+  refreshSelection();
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 function makeProxy(def){
@@ -692,6 +693,9 @@ function applyIsolation(){
   applyExplode();
 }
 function refreshSelection(){
+  // Highlight the selected mechanical component in ASSEMBLY/INSPECT only.
+  // The broad teal BoxHelper obstructed the sterile studio during posing.
+  if(!['tree','inspect'].includes(currentTab)){outline.visible=false;return;}
   const part=partRoots.get(selectedSerial);
   if(!part||!part.visible){outline.visible=false;return;}
   outline.setFromObject(part);outline.visible=true;
