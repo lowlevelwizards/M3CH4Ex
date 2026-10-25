@@ -6,6 +6,7 @@ import {FRAMES,CATALOG,BY_PART,PAINTS,RECIPES,defaultBuild,validSockets,
  install,addSupport,removeSupport,changeFrame,inspect,recipe,
  loadGraybox,exportGraybox,socketsForFrame} from './grayboxCore.js';
 import {buildGrayboxScene} from './grayboxVisual.js';
+import {planTestYardDeployment,storeTestYardDeployment} from './grayboxDeployment.js';
 import {AUDIT_CATEGORIES,buildAuditScene,auditText} from './grayboxAudit.js';
 import {HOUSINGS,CARRIERS,STANCES,FEET,DEFAULT_FORM} from './grayboxArchitecture.js';
 import {setForm,setLimbPlating} from './grayboxCore.js';
@@ -34,7 +35,7 @@ const grid=new THREE.GridHelper(20,20,0xbec6be,0xdde3dc);
 grid.position.y=-.035;grid.material.transparent=true;grid.material.opacity=.28;scene.add(grid);
 const focus=new THREE.Vector3(0,1.85,0);
 let azimuth=-.7,elevation=.24,distance=7.2,body=null,liveSockets=[];
-let currentView='quarter',userZoom=false;
+let currentView='quarter',userZoom=false,measuredFit=null;
 function updateCamera(){
  elevation=Math.max(-.30,Math.min(1.45,elevation));
  camera.position.copy(focus).add(new THREE.Vector3(
@@ -86,8 +87,8 @@ function refreshStage(){
    buildAuditScene(auditCategory,auditPart,model.paint,auditLevel,auditCompare):
    buildGrayboxScene(model,{socketVisible,
      highlightCategory:pending?.category,highlightPart:pending?.id});
- body=result.root;liveSockets=result.sockets;
- scene.add(body);framePreview();
+ body=result.root;liveSockets=result.sockets;measuredFit=result.fit||null;
+ scene.add(body);framePreview();buildAssessment();
 }
 function button(label,callback,options={}){
  const b=document.createElement('button');b.type='button';
@@ -109,6 +110,18 @@ function buildAssessment(){
  if(chk.issues.length){
   const item=document.createElement('div');item.className='error';
   item.textContent=chk.issues.join(' · ');target.append(item);
+ }
+ if(measuredFit){
+  const line=document.createElement('div');line.className='subnote';
+  line.textContent='MEASURED CONTACT '+measuredFit.connected+' / '+measuredFit.checked+
+   ' · '+(measuredFit.ok?'MATES NEAR SUPPORT MATERIAL':'PHYSICAL GAPS DETECTED')+
+   ' · MESH-BOX CHECK ONLY';
+  target.append(line);
+  if(measuredFit.issues.length){
+   const warning=document.createElement('div');warning.className='error';
+   warning.textContent=measuredFit.issues.slice(0,3).join(' · ');
+   target.append(warning);
+  }
  }
  if(chk.experimental){
   const warning=document.createElement('div');warning.className='subnote';
@@ -396,6 +409,19 @@ for(const [id,name] of [['gb-quarter','quarter'],['gb-front','front'],
 $('reset').addEventListener('click',()=>{
  model=defaultBuild();activeCategory='frame';pending=null;save();renderPanels();refreshStage();
  status('Stock graybox rig restored');
+});
+$('deploy').addEventListener('click',()=>{
+ const plan=planTestYardDeployment(model);
+ if(!plan.ok){status(plan.reason,true);return;}
+ const replacements=plan.substitutions.map(s=>s.original+' → '+s.live);
+ const notice='DEPLOY TO LIVE TEST YARD?\n\n'+
+  (replacements.length?'PROTOTYPE SUBSTITUTIONS:\n'+replacements.join('\n')+'\n\n':'')+
+  plan.notice+'\n\nYour complete experimental machine stays saved here.';
+ if(!window.confirm(notice)){status('Deployment cancelled; constructor unchanged.');return;}
+ try{
+  const url=storeTestYardDeployment(plan,window.localStorage);
+  window.location.assign(url);
+ }catch(error){status('Could not hand off loadout: '+error.message,true);}
 });
 $('export').addEventListener('click',()=>{
  try{

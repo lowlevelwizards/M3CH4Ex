@@ -46,7 +46,7 @@ label{font-size:12px;color:#44564a}select{padding:9px;width:100%;border:1px soli
 .recipe-list strong{display:block;font-size:11px}.recipe-list small{display:block;margin-top:4px;color:#69776e;font-weight:500}
 .bottom{background:#fff;padding:11px 14px;border-top:1px solid #dce2da}
 #status{font-size:11px;color:#587365;line-height:1.4;margin:0 0 9px;min-height:14px}
-.actions{display:grid;grid-template-columns:.8fr 1.2fr .8fr;gap:6px}
+.actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.actions .deploy-action{grid-column:1/-1;background:#2c5044;color:white;border-color:#2c5044;font-size:12px;min-height:43px}
 .actions button{font-size:10px}.disclaimer{font-size:9px;line-height:1.5;color:#859189;margin:10px 0 0}
 @media(max-width:760px){
  .topbar{height:58px;padding:8px 12px}.topbar h1{font-size:13px}.topbar h1 span{font-size:9px}.topbar a{font-size:10px}

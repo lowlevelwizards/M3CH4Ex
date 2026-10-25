@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import {BY_PART,socketsForBuild} from './grayboxCore.js';
 import {buildSharedVisual} from './grayboxSharedVisual.js';
 import {localSocket,socketHardware,makeMobilityAdapter} from './grayboxRigging.js';
+import {assessPhysicalContacts} from './grayboxPhysicalAudit.js';
 import {buildFrameExtensions,buildBodyHousing,buildWeaponCarrier,
  buildFeetAccessory,buildFrameRiser,buildIndependentLegPlating} from './grayboxFormVisual.js';
 import './constructionManipulator.js';
@@ -583,5 +584,30 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
    glyph.userData.socket=socket.id;sockets.push({mesh:glyph,socket});
   }
  }
- return {root,sockets,objects};
+ // A group parent is not evidence of physical support. Independently probe
+ // visible contact material at the authored receiver in measured world space.
+ root.updateMatrixWorld(true);
+ const worldBoxes=group=>{
+  const bounds=[];
+  if(!group)return bounds;
+  group.traverse(o=>{
+   if(!o.isMesh||!o.visible)return;
+   const b=new THREE.Box3().setFromObject(o,true);
+   if(!b.isEmpty())bounds.push({min:b.min.toArray(),max:b.max.toArray()});
+  });
+  return bounds;
+ };
+ const probes=objects.filter(o=>o.category!=='frame'&&o.group.userData.installedSocket)
+  .map(o=>{
+   const socket=allSockets.find(s=>s.id===o.socket);
+   const parent=socket?.parent?objects.find(p=>p.category===socket.parent)?.group:body;
+   const groundMin=o.category==='mobility'
+    ?new THREE.Box3().setFromObject(o.group,true).min.y:undefined;
+   return {station:o.category,socket:o.socket,
+    target:o.group.userData.rootMateWorld,
+    parentMeshes:worldBoxes(parent),childMeshes:worldBoxes(o.group),groundMin};
+  });
+ const fit=assessPhysicalContacts(probes);
+ root.userData.physicalFit=fit;
+ return {root,sockets,objects,fit};
 }
