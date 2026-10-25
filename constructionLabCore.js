@@ -134,12 +134,20 @@ export function labSectionAction(assembly,side,section,action,options={}){
   if(action==='swap'){
     const snapshot=structuredClone(assembly);
     const wasGrounded=assembly.labGrounding?.mode==='grounded';
+    const priorMechanics=installedLimbGeometry(assembly,side);
     const result=replaceAnatomyComponent(assembly,side,section,options.variant||'original');
     if(!result.ok)return result;
+    const nextMechanics=installedLimbGeometry(assembly,side);
+    const dimensions=geometry=>geometry&&{
+      upper:geometry.upper,lower:geometry.lower,
+      contact:geometry.footContactDropM
+    };
+    const geometryChanged=JSON.stringify(dimensions(priorMechanics))!==
+      JSON.stringify(dimensions(nextMechanics));
     // Generic swapping affects geometry and/or sole contact height.
     // If the assembled leg can stand, recompute grounded IK using only new
     // component metadata; the caller cannot replace foot placement by eye.
-    if(anatomyReadiness(assembly)&&(wasGrounded||options.variant!=='original')){
+    if(anatomyReadiness(assembly)&&(wasGrounded||geometryChanged)){
       const pose=wasGrounded&&snapshot.labGrounding?.bodyDropM>0?'crouch':'neutral';
       const grounded=labAssistedPreset(assembly,pose);
       if(!grounded.ok){
