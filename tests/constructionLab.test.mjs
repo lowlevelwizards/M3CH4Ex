@@ -349,3 +349,19 @@ test('08D v5 blueprint stores foot targets and rejects mismatched joint data',()
   delete v4.grounding;delete v4.manualPose;
   assert.equal(labGrounding(loadLabBlueprint(v4)).mode,'manual');
 });
+
+test('08D restoring manual mode returns to prior hinge pose and neutral body transform',()=>{
+  const rig=createLabMachine();
+  assert.equal(labJointAction(rig,'right','hip',12).ok,true);
+  const original=labPose(rig);
+  assert.equal(labAssistedPreset(rig,'crouch').ok,true);
+  assert.notDeepEqual(labPose(rig),original);
+  assert.equal(labReturnManual(rig).ok,true);
+  assert.deepEqual(labPose(rig),original);
+  assert.equal(labGrounding(rig).bodyDropM,0);
+  assert.equal(labJointAction(rig,'left','knee',20).ok,true);
+  const changed=labPose(rig);
+  assert.equal(labAssistedPreset(rig,'step-right').ok,true);
+  labReturnManual(rig);
+  assert.deepEqual(labPose(rig),changed);
+});
