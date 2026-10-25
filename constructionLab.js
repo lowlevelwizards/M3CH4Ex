@@ -81,18 +81,27 @@ function renderCatalog(){
   });
   if(selectedSlot==='mobility'){
     const workbench=document.createElement('section');workbench.className='card';
-    const title=document.createElement('h2');title.textContent='STAGE 06 / INDEPENDENT LEGS';
+    const title=document.createElement('h2');title.textContent='STAGE 07 / SERVICEABLE ANATOMY';
     workbench.append(title);
     const note=document.createElement('p');note.className='meta';
     note.textContent=installed==='legs-yard'
-      ?'Select either hip to remove or reinstall the actual owned Yardwalker leg. Both sides are independent.'
-      :'Independent limb sockets are currently authored for Yardwalker only. Choose Yardwalker above to test.';
+      ?'Both legs have independently mounted hip, thigh, knee, shin, ankle and foot assemblies. Select any section in ASSEMBLY, or use the shin quick actions below.'
+      :'Serviceable anatomy is authored for Yardwalker only. Choose Yardwalker above to test.';
     workbench.append(note);
     for(const leg of labLegDetails(machine)){
       const b=button(leg.side.toUpperCase()+' · '+(leg.installed?'DETACH':'INSTALL'),
         ()=>doLegAction(leg.side,leg.installed?'detach':'attach'));
       b.disabled=installed!=='legs-yard';
       b.style.width='100%';b.style.marginBottom='6px';workbench.append(b);
+      const check=labSectionDetails(machine).find(x=>x.side===leg.side);
+      if(leg.installed&&check){
+        const shin=check.sections.shin;
+        const variant=shin.variant==='rook'?'original':'rook';
+        const t=button(leg.side.toUpperCase()+' SHIN · '+
+          (shin.installed?'SWAP TO '+(variant==='rook'?'ROOK S2':'YARDWALKER'):'INSTALL '+(variant==='rook'?'ROOK S2':'YARDWALKER')),
+          ()=>doSectionAction(leg.side,'shin',shin.installed?'swap':'attach',{variant}));
+        t.style.width='100%';t.style.marginBottom='10px';workbench.append(t);
+      }
     }
     catalog.prepend(workbench);
   }
@@ -120,6 +129,29 @@ function showTree(){
       const b=button(leg.side.toUpperCase()+' LEG · INSTALL ON '+leg.socket.toUpperCase(),
         ()=>doLegAction(leg.side,'attach'));
       b.style.width='100%';b.style.marginBottom='5px';tray.append(b);
+    }
+    tree.append(tray);
+  }
+  const stored=labStowed(machine);
+  if(stored.length){
+    const tray=document.createElement('section');tray.className='card';
+    const heading=document.createElement('h2');heading.textContent='OWNED / PARKED ASSEMBLIES';
+    tray.append(heading);
+    for(const entry of stored){
+      const p=document.createElement('p');p.className='meta';
+      p.textContent=entry.name+' · '+entry.serial+
+        (entry.descendants?' · '+entry.descendants+' supported parts':'');
+      tray.append(p);
+      const part=own(entry.serial),def=BY_ID.get(part?.definitionId);
+      if(def?.assemblyRole==='anatomy'){
+        const select=button('INSTALL '+def.section.toUpperCase()+' · '+def.side.toUpperCase(),
+          ()=>doSectionAction(def.side,def.section,'attach',{variant:def.variant}));
+        select.style.width='100%';select.style.marginBottom='5px';tray.append(select);
+      }else if(def?.assemblyRole==='leg'){
+        const select=button('REINSTALL '+def.side.toUpperCase()+' LEG',
+          ()=>doLegAction(def.side,'attach'));
+        select.style.width='100%';select.style.marginBottom='5px';tray.append(select);
+      }
     }
     tree.append(tray);
   }
@@ -152,10 +184,31 @@ function doLegAction(side,action){
   setMessage('Yardwalker '+side+' leg '+(action==='attach'?'installed':'detached')+
     ' · original geometry and serial retained.');
 }
+function doSectionAction(side,section,action,options={}){
+  const previous=labSectionDetails(machine).find(x=>x.side===side);
+  const priorSerial=previous?.sections?.[section]?.serial;
+  const result=labSectionAction(machine,side,section,action,options);
+  if(!result.ok){setMessage(result.reason,true);return;}
+  const current=labSectionDetails(machine).find(x=>x.side===side);
+  if(action==='detach'){
+    const i=['hip','thigh','knee','shin','ankle','foot'].indexOf(section);
+    selectedSerial=current?.sections?.[['hip','thigh','knee','shin','ankle','foot'][i-1]]?.serial||
+      current?.legSerial||machine.installed.mobility;
+    selectedSocket=null;
+  }else{
+    selectedSerial=current?.sections?.[section]?.serial||machine.installed.mobility;
+    selectedSocket=null;
+  }
+  rebuild(false);switchTab('inspect');
+  setMessage(side+' '+section+' '+(action==='swap'?'replaced':
+    action==='detach'?'removed to owned tray':'installed')+' · assembly graph validated.');
+}
 function renderInspection(){
   inspect.replaceChildren();
   const node=labNodeList(machine).find(n=>n.serial===selectedSerial);
   const selectedLeg=labLegDetails(machine).find(l=>l.serial===selectedSerial);
+  const selectedDef=node&&BY_ID.get(node.definitionId);
+  const selectedSection=selectedDef?.assemblyRole==='anatomy'?selectedDef:null;
   const card=document.createElement('section');card.className='card';
   const heading=document.createElement('h2');
   heading.textContent=node?.name||(selectedLeg?'Yardwalker '+selectedLeg.side+' leg · DETACHED':'SELECT A PART');
@@ -179,7 +232,8 @@ function renderInspection(){
     const description=document.createElement('p');description.className='meta';
     description.textContent=def?.description||'Adapter defined in the shared structural graph.';
     card.append(description);
-    if(def&&!SHARED_PART_IDS.includes(def.id)&&def.id!=='power-dynamo'&&def.assemblyRole!=='leg'){
+    if(def&&!SHARED_PART_IDS.includes(def.id)&&def.id!=='power-dynamo'&&
+       !['leg','anatomy'].includes(def.assemblyRole)){
       const note=document.createElement('p');note.className='meta';
       note.textContent='The shared standalone visual registry has not yet migrated this mesh. A labeled envelope placeholder is displayed.';
       card.append(note);
@@ -195,6 +249,31 @@ function renderInspection(){
       const note=document.createElement('p');note.className='meta';
       note.textContent='Owned part '+selectedLeg.serial+' remains in the detached tray. It is not rendered as attached geometry.';
       card.append(note);
+    }
+  }
+  if(selectedSection){
+    const side=selectedSection.side,section=selectedSection.section;
+    const index=['hip','thigh','knee','shin','ankle','foot'].indexOf(section);
+    const descendants=labNodeList(machine).filter(n=>n.parentSerial===node.serial);
+    const note=document.createElement('p');note.className='meta';
+    note.textContent=descendants.length
+      ?'Supports '+descendants.map(n=>n.name).join(', ')+'. Removing this part requires a dependency-aware operation.'
+      :'This section has no attached children.';
+    card.append(note);
+    if(section==='shin'){
+      const alternative=selectedSection.variant==='original'?'rook':'original';
+      const replace=button('REPLACE SHIN → '+(alternative==='rook'?'ROOK S2 SPAR':'ORIGINAL YARDWALKER'),
+        ()=>doSectionAction(side,'shin','swap',{variant:alternative}));
+      replace.style.width='100%';card.append(replace);
+    }
+    const detach=button('DETACH '+section.toUpperCase()+
+      (descendants.length?' WITH SUPPORTED ASSEMBLIES':''),
+      ()=>doSectionAction(side,section,'detach',{cascade:true}));
+    detach.style.width='100%';detach.style.marginTop='8px';card.append(detach);
+    if(descendants.length){
+      const strict=button('REMOVE ONLY THIS PART (CHECK SUPPORTS)',
+        ()=>doSectionAction(side,section,'detach',{cascade:false}));
+      strict.style.width='100%';strict.style.marginTop='5px';card.append(strict);
     }
   }
   inspect.append(card);
@@ -232,14 +311,14 @@ function renderInspection(){
         b.style.width='100%';panel.append(b);
       } else {
         const note=document.createElement('p');note.className='meta';
-        note.textContent='This socket is inspectable. Arbitrary equipment reattachment is not enabled in Stage 06.';
+        note.textContent='This socket is inspectable. Only the authored, compatible components are available; universal free placement is deferred.';
         panel.append(note);
       }
       inspect.append(panel);
     }
   }
   const info=document.createElement('p');info.className='explain';
-  info.textContent='Stage 06: independent, individually owned Yardwalker legs. Existing Kestrel/Hauler remain paired modules. Knees, shins and cross-family leg swaps come later.';
+  info.textContent='Stage 07: genuine nested Yardwalker anatomy with serviceable shins. All removals are checked for supported components. Kestrel, Hauler and free-form mounts remain outside this stage.';
   inspect.append(info);
 }
 function switchTab(which){
