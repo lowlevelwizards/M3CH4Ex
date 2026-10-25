@@ -266,6 +266,46 @@ export function proposeAttachment(assembly, byId, serial, parentSerial, socketId
     if (!verdict.valid) return { ok: false, reason: verdict.errors.join(' '), errors: verdict.errors };
     return { ok: true, graph };
 }
+/** Generic structural swap proposal.
+ * No knowledge of legs, manufacturers or presentation. The type/standard of
+ * both mating interfaces and every supported child must remain compatible.
+ * The operation preserves the serial identity of ALL descendants, and is
+ * atomic: callers only commit the returned graph after validation.
+ */
+export function proposeComponentReplacement(assembly,byId,oldSerial,nextSerial){
+    const existing=ensureAssemblyGraph(assembly,byId);
+    const old=existing.nodes[oldSerial],nextOwned=assembly.owned.find(p=>p.serial===nextSerial);
+    if(!old||!old.parentSerial||old.virtual)return {ok:false,reason:'Select a replaceable attached component.'};
+    if(!nextOwned||existing.nodes[nextSerial])return {ok:false,reason:'Replacement must be owned and detached.'};
+    const previous=byId.get(old.definitionId),next=byId.get(nextOwned.definitionId);
+    if(!previous?.mountInterface||!next?.mountInterface)
+        return {ok:false,reason:'Both parts must declare typed mechanical mounting interfaces.'};
+    const before=previous.mountInterface,after=next.mountInterface;
+    if(after.kind!==before.kind||after.standard!==before.standard||
+       (previous.side&&previous.side!==next.side))
+        return {ok:false,reason:'Replacement mounting interface, size or side is incompatible.'};
+    const parent=definition(existing.nodes[old.parentSerial]?.definitionId,byId);
+    const upstream=parent?.sockets?.find(p=>p.id===old.parentSocket);
+    if(!upstream||upstream.standard!==after.standard||
+       (upstream.acceptsRole&&upstream.acceptsRole!==after.kind))
+        return {ok:false,reason:'Replacement does not mate with upstream socket.'};
+    const supported=Object.values(existing.nodes).filter(node=>node.parentSerial===oldSerial);
+    for(const child of supported){
+        const receiver=next.sockets?.find(socket=>socket.id===child.parentSocket);
+        const childType=byId.get(child.definitionId)?.mountInterface;
+        if(!receiver||!childType||receiver.standard!==childType.standard||
+          (receiver.acceptsRole&&receiver.acceptsRole!==childType.kind))
+            return {ok:false,reason:'Replacement cannot support attached '+child.definitionId+' through '+child.parentSocket+'.'};
+    }
+    const proposal=clone(existing);
+    delete proposal.nodes[oldSerial];
+    proposal.nodes[nextSerial]={...old,serial:nextSerial,definitionId:nextOwned.definitionId};
+    for(const child of supported)proposal.nodes[child.serial].parentSerial=nextSerial;
+    const checked=validateGraph(proposal,assembly,byId);
+    if(!checked.valid)return {ok:false,reason:checked.errors.join('; '),errors:checked.errors};
+    return {ok:true,graph:proposal,replaced:oldSerial,installed:nextSerial,
+       retainedDescendants:supported.map(n=>n.serial)};
+}
 export function proposeRemoval(graph, serial, { cascade = false } = {}) {
     if (!graph?.nodes[serial]) return { ok: false, reason: `Unknown component ${serial}.` };
     const descendants = new Set(); let frontier = [serial];
