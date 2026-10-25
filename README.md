@@ -23,11 +23,14 @@ The root `index.html` is the white construction studio; it is not the combat gam
 - **Stage 08**: inspectable hip/knee/ankle hinges with independent one-axis pose controls for each leg
 - **Stage 08**: two-ended, telescoping knee hydraulics driven by actual thigh/shin anchors; both original and Rook S2 shins supported
 - **Stage 08**: neutral, crouch, left/right step, and asymmetric poses; resettable two-knee motion sweep; stroke diagnostics and conservative clearance hints
-- **Stage 08**: validated v4 JSON blueprint includes all six joint angles; v1–v3 imports migrate to neutral pose
+- **Stage 08**: six independent manual joints with a tracked two-ended hydraulic actuator
+- **Stage 08D**: live-game two-link IK transplanted without combat dependencies; planted-foot crouch, committed single-foot lift and grounded two-step preview
+- **Stage 08D**: body translation coordinated with stationary support-foot world anchors; manual joint mode remains separate
+- **Stage 08D**: validated v5 JSON blueprints include foot targets, derived joint poses and manual mode; v1–v4 remain importable
 - Isolate / explode previews, JSON blueprint export and import
 - Assembly and blueprint unit tests
 
-**Not implemented yet:** cross-family leg mixing, arbitrary attachment placement, multi-axial joint solvers, force/torque-driven walking, full collision sweep resolution, balance physics, individual paint, damage propagation, new full manufacturers, or combat. Kestrel and Hauler remain paired mobility packages. Stage 08 only drives controlled single-axis poses; it does not simulate actuator forces, true swept mesh interference, or walking.
+**Not implemented yet:** cross-family leg mixing, arbitrary attachment placement, multi-axial joint solvers, force/torque-driven walking, full collision sweep resolution, dynamic balance, individual paint, damage propagation, new full manufacturers, or combat. Kestrel and Hauler remain paired mobility packages. Stage 08 only drives controlled single-axis poses; it does not simulate actuator forces, true swept mesh interference, or walking.
 
 ## Why some source files are here
 
@@ -44,7 +47,7 @@ Use a local HTTP server to preview ES modules, or GitHub Pages. There is no bund
 1. Open the lab and choose **MOBILITY**. The Stage 07 workbench exposes both legs and the one-click **Rook S2** shin swap.
 2. Open **ASSEMBLY** and tap a named shin node (or tap its mesh in the 3D scene). In **INSPECT**, replace the shin or detach it **with supported assemblies**.
 3. The detached original shin (and, where appropriate, its ankle and foot) remains in **OWNED / PARKED ASSEMBLIES**. Reinstall it later using its original serial.
-4. Use **EXPORT JSON** and **IMPORT JSON** to verify asymmetrical configurations. Version 1–3 blueprints remain importable; new exports use version 4.
+4. Use **EXPORT JSON** and **IMPORT JSON** to verify asymmetrical configurations. Version 1–4 blueprints remain importable; new exports use version 5.
 
 **Scope:** Stage 07 is a static assembly/geometry proof, not a mechanical gait solver. The alternate shin uses the same authored knee and ankle locations, and its 20 kg mass reduction is represented in the lab's derived assembly mass.
 
@@ -58,3 +61,15 @@ Use a local HTTP server to preview ES modules, or GitHub Pages. There is no bund
 6. Export a v4 blueprint while crouched, reset, then import: the pose and shin configuration should return.
 
 **Important:** This is controlled, one-axis kinematics with physical joint pivots and a visually telescoping hydraulic. The clearance indicator is a coarse AABB warning, not an exact per-triangle or full swept-volume collision detector. Joint articulation does not yet drive locomotion, load, torque, or balance. 
+
+## Stage 08D — Live walking logic in the construction lab
+
+The purpose here is to reuse what already works in live M3CH4. The portable `liveLegIK.js` is a transcription of `solveLegIK` from live `articulationMotion.js` without the original combat/reload import. `constructionGroundedPose.js` adapts the live foot-contact strategy to authored Yardwalker attachment coordinates. The rest of the game, combat dependencies, maps, and physics simulation are not imported.
+
+1. Open **POSE** and choose **PLANTED CROUCH**: the body lowers 15 cm while both ankle anchors remain in place.
+2. Choose **LIFT LEFT** or **LIFT RIGHT**: the supporting pad remains at its world anchor, while the other leg lifts and moves forward.
+3. Select **TEST PLANTED TWO-STEP MOTION**: an animated committed left/right step with stationary support contacts and a chassis that advances modestly. Stopping or finishing restores the original pose.
+4. Choose **MANUAL JOINT MODE** to adjust each authored hip/knee/ankle angle without foot constraints. The old manual hinge sweep remains a diagnostic.
+5. Replace the left shin with **ROOK S2** in MOBILITY and repeat. The two shins currently share knee/ankle anchors, so the same IK solves both. Longer/shorter future shins will require their own interface geometry and reachable-target tests.
+
+The geometry tests confirm planted ankle Y/Z positions under crouch, one-foot steps, and the two-step walk. Full swept collisions, out-of-plane body shifting, propulsion, and load-driven balance are not simulated. Stance and swing timing follow the live design but are intentionally simplified for stationary laboratory demonstration.
