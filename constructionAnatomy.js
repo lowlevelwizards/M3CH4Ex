@@ -81,8 +81,15 @@ for(const side of LEG_SIDES){
           variant==='stabilizer'?'Dockpad F2 / '+side+' broad stabilizer foot':
           'Yardwalker '+side+' '+section,slot:'anatomy',side,
         section,variant,assemblyRole:'anatomy',massKg:kg,mountSize:'medium',
-        mountInterface:{kind:section,standard:'medium',
-          orientation:[0,1,0],family:'Yardwalker anatomy'},
+        mountInterface:{kind:['thigh','shin'].includes(section)?'structural-link':section,
+          standard:'medium',orientation:[0,1,0],
+          applications:['thigh','shin'].includes(section)
+            ?['thigh','shin','upper-arm','forearm','brace']
+            :[section],
+          // A current placement is not the same thing as a manufacturer's
+          // intrinsic purpose. Structural links can fill other compatible
+          // machine locations once those locations exist in the builder.
+          authoredApplication:section,family:'Yardwalker anatomy'},
         mechanical:section==='thigh'?{
           hipReceiver:[0,0,0],kneeReceiver:[...attach.position],
           spanM:Math.hypot(...attach.position),
@@ -100,8 +107,8 @@ for(const side of LEG_SIDES){
           upperStandard:'medium',lowerStandard:'medium'
         }:undefined,
         sockets:attach?[{...attach,standard:'medium',
-          acceptsRole:section==='hip'?'thigh':section==='thigh'?'knee':
-            section==='knee'?'shin':section==='shin'?'ankle':'foot',
+          acceptsRole:section==='hip'?'structural-link':section==='thigh'?'knee':
+            section==='knee'?'structural-link':section==='shin'?'ankle':'foot',
           roleHint:'anatomy',normal:[0,1,0]},
           ...(section==='thigh'?[{id:'drive-mount',position:[
             layout.side*.155,-.104,.125],standard:'light',maxLoadKg:35,
