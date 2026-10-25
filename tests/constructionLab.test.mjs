@@ -1,9 +1,11 @@
+import {JOINT_LIMITS,PRESET_NAMES,articulationReport,actuatorStrokeCheck} from '../constructionArticulation.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createLabMachine, labEquip, labInspection, labBlueprint, loadLabBlueprint,
   labNodeList, labSetGeneratorMount, labLegAction, labLegDetails,
-  labSectionAction, labSectionDetails, labStowed
+  labSectionAction, labSectionDetails, labStowed,
+  labJointAction,labPosePreset,labPose
 } from '../constructionLabCore.js';
 
 test('default lab rig is an authentic, graph-valid five-station machine',()=>{
@@ -196,7 +198,7 @@ test('Stage 07 blueprint roundtrip preserves mixed shins and stowed supported br
   assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
   assert.equal(labSectionAction(rig,'right','shin','detach',{cascade:true}).ok,true);
   const bp=labBlueprint(rig);
-  assert.equal(bp.version,3);
+  assert.equal(bp.version,4);
   const saved=JSON.stringify(bp);
   const restored=loadLabBlueprint(bp);
   assert.equal(JSON.stringify(labBlueprint(restored)),saved);
@@ -214,4 +216,69 @@ test('Stage 07 rejects a wrong-side hip/socket and malformed stored inventory',(
   const foreign=structuredClone(bp);
   foreign.anatomy.stowed['bogus']=[{serial:'bogus',definitionId:'unknown'}];
   assert.throws(()=>loadLabBlueprint(foreign));
+});
+
+test('Stage 08 has independently addressable joint channels with authored limits',()=>{
+  const machine=createLabMachine();
+  assert.equal(Object.keys(labPose(machine)).length,6);
+  assert.equal(labJointAction(machine,'left','knee',60).ok,true);
+  assert.equal(labPose(machine)['left:knee'],60);
+  assert.equal(labPose(machine)['right:knee'],0);
+  assert.equal(labJointAction(machine,'left','hip',25).ok,true);
+  assert.equal(labPose(machine)['left:hip'],25);
+  const before=JSON.stringify(labPose(machine));
+  assert.equal(labJointAction(machine,'left','knee',101).ok,false);
+  assert.equal(labJointAction(machine,'right','ankle',-90).ok,false);
+  assert.equal(labJointAction(machine,'rear','hip',0).ok,false);
+  assert.equal(JSON.stringify(labPose(machine)),before);
+});
+test('Stage 08 knee actuator strokes remain inside declared limits at hinge extrema',()=>{
+  for(const side of ['left','right']){
+    const {min,max}=JOINT_LIMITS.knee;
+    for(let angle=min;angle<=max;angle+=5){
+      const check=actuatorStrokeCheck(side,angle);
+      assert.ok(check.valid,side+' knee '+angle+'° stroke '+check.lengthM+' m out of range');
+      assert.ok(check.extensionM>0);
+    }
+  }
+});
+test('Stage 08 presets pose both sides independently and preserve valid stroke',()=>{
+  const machine=createLabMachine();
+  for(const name of PRESET_NAMES){
+    const result=labPosePreset(machine,name);
+    assert.equal(result.ok,true,name+': '+result.reason);
+    assert.equal(articulationReport(machine).valid,true);
+  }
+  assert.notEqual(labPose(machine)['left:knee'],labPose(machine)['right:knee']);
+  assert.equal(labPosePreset(machine,'unknown').ok,false);
+  assert.equal(labPosePreset(machine,'neutral').ok,true);
+  assert.ok(Object.values(labPose(machine)).every(x=>x===0));
+});
+test('Stage 08 blueprint persists six mechanical degrees of freedom with v3 compatibility',()=>{
+  const machine=createLabMachine();
+  assert.equal(labJointAction(machine,'left','knee',70).ok,true);
+  assert.equal(labJointAction(machine,'right','hip',-20).ok,true);
+  assert.equal(labSectionAction(machine,'left','shin','swap',{variant:'rook'}).ok,true);
+  const bp=labBlueprint(machine);
+  assert.equal(bp.version,4);
+  const restored=loadLabBlueprint(bp);
+  assert.deepEqual(labPose(restored),labPose(machine));
+  assert.deepEqual(labBlueprint(restored),bp);
+  const malformed=structuredClone(bp);malformed.pose['left:knee']=200;
+  assert.throws(()=>loadLabBlueprint(malformed));
+  const foreign=structuredClone(bp);foreign.pose['left:unknown']=5;
+  assert.throws(()=>loadLabBlueprint(foreign));
+  const v3=structuredClone(bp);v3.version=3;delete v3.pose;
+  const migrated=loadLabBlueprint(v3);
+  assert.ok(Object.values(labPose(migrated)).every(x=>x===0));
+});
+test('Stage 08 pose state persists through equipment changes and independent shin swaps',()=>{
+  const machine=createLabMachine();
+  labPosePreset(machine,'crouch');
+  const before=labPose(machine);
+  assert.equal(labSectionAction(machine,'left','shin','swap',{variant:'rook'}).ok,true);
+  assert.equal(labEquip(machine,'combat','gun-short').ok,true);
+  assert.equal(labSetGeneratorMount(machine,'offset').ok,true);
+  assert.deepEqual(labPose(machine),before);
+  assert.equal(labInspection(machine).valid,true);
 });
