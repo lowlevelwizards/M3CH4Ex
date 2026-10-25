@@ -40,7 +40,8 @@ const DEFS=[
 for(const part of DEFS)if(!BY_ID.has(part.id)){CATALOG.push(part);BY_ID.set(part.id,part);}
 for(const frame of CATALOG.filter(d=>d.slot==='structure')){
  if(!frame.sockets.some(s=>s.id===PORT))frame.sockets.push({
-   id:PORT,standard:'medium',position:[.81,-.07,-.24],normal:[1,0,0],
+   id:PORT,standard:'medium',position:[.81,-.07,-.24],
+   rotation:[0,0,0],normal:[1,0,0],
    maxLoadKg:285,acceptsRole:'utility-bracket',roleHint:'industrial auxiliary'
  });
 }
