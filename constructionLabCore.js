@@ -199,19 +199,38 @@ export function labGrounding(assembly){return structuredClone(assembly.labGround
 export function labSolveGrounded(assembly,targets){
   return solveGroundedRig(targets,{upperLowerForSide:side=>installedLimbGeometry(assembly,side)});
 }
+/** The resting chassis datum belongs to the combined machine, not to
+ * the shortest limb's original design. Search for the *minimal* shared body
+ * lowering that lets both installed legs reach the same physical floor.
+ * No individual-foot position is moved and no joint limit is overridden.
+ */
+export function labSupportBaseline(assembly){
+  if(!anatomyReadiness(assembly)||!yardLegSupported(assembly))
+    return {ok:false,reason:'Two fully assembled Yardwalker legs required'};
+  const neutral=groundedTargets('neutral');
+  for(let i=0;i<=60;i++){
+    const dropM=Math.round(i*.005*10000)/10000;
+    const target={...neutral,bodyDropM:dropM};
+    if(labSolveGrounded(assembly,target).ok)
+      return {ok:true,dropM};
+  }
+  return {ok:false,reason:'No level two-foot stance within 30 cm chassis travel and authored joint limits'};
+}
 export function labAssistedPreset(assembly,name){
   const snapshot=structuredClone(assembly);
   try{
     if(!yardLegSupported(assembly)||!anatomyReadiness(assembly))
       return {ok:false,reason:'Serviceable Yardwalker legs must be installed for grounded posing.'};
     const requested=groundedTargets(name);
+    const baseline=labSupportBaseline(assembly);
+    if(!baseline.ok)throw Error(baseline.reason);
     let chosen=null,solved=null,scale=1;
     // Scale motion about grounded support anchors, NOT independently per foot.
     // The requested values are shown to the player if reduced.
     for(let i=0;i<=60;i++){
       scale=1-i/60;
       const g=structuredClone(requested);
-      g.bodyDropM=Math.round(requested.bodyDropM*scale*10000)/10000;
+      g.bodyDropM=Math.round((baseline.dropM+requested.bodyDropM*scale)*10000)/10000;
       for(const side of LEG_SIDES){
         g.feet[side].y=Math.round(requested.feet[side].y*scale*10000)/10000;
         g.feet[side].z=Math.round(requested.feet[side].z*scale*10000)/10000;
@@ -224,7 +243,9 @@ export function labAssistedPreset(assembly,name){
       {upperLowerForSide:side=>installedLimbGeometry(assembly,side)});
     if(!result.ok)throw Error(result.reason);
     return {ok:true,mode:'grounded',contacts:result.contacts,
-      requestedDropM:requested.bodyDropM,achievedDropM:chosen.bodyDropM,
+      requestedDropM:requested.bodyDropM,
+      achievedDropM:Math.round((chosen.bodyDropM-baseline.dropM)*10000)/10000,
+      supportDropM:baseline.dropM,
       movementScale:scale,limited:scale<.999};
   }catch(error){
     Object.keys(assembly).forEach(key=>delete assembly[key]);
@@ -236,6 +257,8 @@ export function labAssistedPreset(assembly,name){
  * foot's target mid-step and therefore prevents adaptive foot sliding.
  */
 export function labMotionEnvelope(assembly){
+  const baseline=labSupportBaseline(assembly);
+  if(!baseline.ok)return baseline;
   const mechanics=LEG_SIDES.map(side=>installedLimbGeometry(assembly,side));
   const extra=Math.max(0,...mechanics.map(x=>x?.extraReachM||0));
   const candidate={liftM:Math.max(.025,.10-extra*.46),
@@ -243,7 +266,8 @@ export function labMotionEnvelope(assembly){
     bodyDropM:Math.max(.02,.04-extra*.08)};
   for(let scale=1;scale>=.35;scale-=.05){
     const cfg={liftM:candidate.liftM*scale,
-      stepDistanceM:candidate.stepDistanceM*scale,bodyDropM:candidate.bodyDropM*scale};
+      stepDistanceM:candidate.stepDistanceM*scale,bodyDropM:candidate.bodyDropM*scale,
+      supportDropM:baseline.dropM};
     let valid=true;
     for(let i=0;i<=40;i++){
       const report=labSolveGrounded(assembly,contactWalkFrame(i/40,cfg));
@@ -271,11 +295,17 @@ export function labViability(assembly){
   if(!anatomyReadiness(assembly))
     return {structure:connected,ground:false,reason:'A leg or a supported assembly is detached',
       clearance:'UNVERIFIED'};
-  const stand=labSolveGrounded(assembly,groundedTargets('neutral'));
-  const crouch=labSolveGrounded(assembly,groundedTargets('crouch'));
+  const baseline=labSupportBaseline(assembly);
+  const stand=baseline.ok
+    ?labSolveGrounded(assembly,{...groundedTargets('neutral'),bodyDropM:baseline.dropM})
+    :{ok:false,reason:baseline.reason};
+  const fullTarget=groundedTargets('crouch');
+  fullTarget.bodyDropM=Math.round(((baseline.ok?baseline.dropM:0)+fullTarget.bodyDropM)*10000)/10000;
+  const crouch=labSolveGrounded(assembly,fullTarget);
   const stride=labMotionEnvelope(assembly);
   const legs=Object.fromEntries(LEG_SIDES.map(side=>[side,installedLimbGeometry(assembly,side)]));
   return {structure:connected,ground:stand.ok,standReason:stand.reason||null,
+    restingBodyDropM:baseline.ok?baseline.dropM:null,
     fullCrouch:crouch.ok,crouchReason:crouch.reason||null,
     walkPreview:stride.ok,walkReason:stride.reason||null,
     stride:stride.ok?stride:null,legs,
