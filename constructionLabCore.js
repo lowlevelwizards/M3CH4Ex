@@ -146,7 +146,7 @@ export function labBlueprint(assembly){
     anatomy:{
       nodes:Object.values(inspection.graph.nodes)
         .filter(node=>BY_ID.get(node.definitionId)?.assemblyRole==='anatomy')
-        .map(n=>({...n})),
+        .map(n=>({...n})).sort((a,b)=>a.serial.localeCompare(b.serial)),
       stowed:structuredClone(assembly.labStowed||{})
     }};
 }
