@@ -576,3 +576,29 @@ test('Stage 14 all ten recipes remain fully assembled from shared visual familie
   assert.ok(!boundsOf(frame).isEmpty());
  }
 });
+
+test('Stage 14 weapon-mounted shield and cab accessory inherit the physical parent group',()=>{
+ const rig=recipe(2);
+ assert.equal(rig.support['weapon-shield'],'support-shield');
+ const built=buildGrayboxScene(rig);
+ const combat=built.objects.find(x=>x.category==='combat'),
+  shield=built.objects.find(x=>x.socket==='weapon-shield');
+ assert.ok(combat&&shield);
+ assert.equal(shield.group.parent,combat.group,'Shield must attach to weapon scene node');
+ const spec=recipe(7),specView=buildGrayboxScene(spec);
+ const cab=specView.objects.find(x=>x.category==='cab'),
+  sensor=specView.objects.find(x=>x.socket==='cab-accessory-top');
+ assert.ok(cab&&sensor);
+ assert.equal(sensor.group.parent,cab.group,'Sensor must move with installed cab');
+});
+test('Stage 14 one-sided protective plating and paint produce real asymmetrical geometry',()=>{
+ const rig=defaultBuild();
+ rig.limbPlating={left:2,right:0};
+ rig.accentByAssembly['leg-left']=PAINTS.red;
+ const built=buildGrayboxScene(rig),mob=built.objects.find(x=>x.category==='mobility').group;
+ const names=[];
+ mob.traverse(x=>{if(x.name)names.push(x.name);});
+ assert.ok(names.includes('left independent thigh armor'));
+ assert.ok(names.includes('left independent shin armor'));
+ assert.ok(!names.includes('right independent shin armor'));
+});
