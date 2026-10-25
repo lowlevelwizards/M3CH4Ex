@@ -253,16 +253,16 @@ export const PAINTS=Object.freeze({
  blue:'#5d7b96',white:'#d7d5c9',black:'#292b2b',red:'#a84735'
 });
 const variants=[
- ['01 / YELLOW UTILITY','frame-utility','cab-utility','legs-compact','gun-short','power-air','combat-right',[['support-left','support-arm'],['support-roof','support-sensor']],'mustard','teal'],
- ['02 / GRAY GUNFIGHTER','frame-sr','cab-utility','legs-hauler','gun-rivet','power-forge','combat-left',[['support-right','support-arm'],['support-roof','support-ammo']],'slate','charcoal'],
- ['03 / CANOPY ASSAULT','frame-wedge','cab-bubble-gb','mobility-low-gb','gun-scatter','power-dynamo','combat-right',[['support-left','support-shield']],'slate','mustard'],
- ['04 / ORANGE SERVICE','frame-utility','cab-cyclops','legs-yard','gun-short','power-dynamo','combat-right',[['support-left','support-arm'],['support-roof','support-light']],'safety','rust'],
- ['05 / ROUNDED INDUSTRIAL','frame-spire-gb','cab-armored','legs-yard','gun-scatter','power-dynamo','combat-top',[['support-right','support-sensor']],'mustard','charcoal'],
- ['06 / WALKING CANNON','frame-wedge','cab-armored','mobility-low-gb','gun-cannon','power-forge','combat-top',[['support-right','support-shield']],'cream','slate'],
- ['07 / MAINTENANCE WALKER','frame-sr','cab-cyclops','legs-yard','gun-short','power-dynamo','combat-right',[['support-left','support-arm'],['support-rear','support-cooler']],'cream','safety'],
+ ['01 / YELLOW UTILITY','frame-utility','cab-utility','legs-compact','gun-short','power-air','combat-right',[['support-left','support-arm-light'],['support-roof','support-sensor']],'mustard','teal'],
+ ['02 / GRAY GUNFIGHTER','frame-sr','cab-utility','legs-hauler','gun-rivet','power-forge','combat-left',[['support-right','support-arm-light'],['support-roof','support-ammo']],'slate','charcoal'],
+ ['03 / CANOPY ASSAULT','frame-wedge','cab-bubble-gb','mobility-low-gb','gun-scatter','power-dynamo','combat-right',[['weapon-shield','support-shield'],['support-left','support-arm-light']],'slate','mustard'],
+ ['04 / ORANGE SERVICE','frame-utility','cab-cyclops','legs-yard','gun-short','power-dynamo','combat-right',[['support-left','support-arm-light'],['support-roof','support-light']],'safety','rust'],
+ ['05 / ROUNDED INDUSTRIAL','frame-spire-gb','cab-armored','legs-yard','gun-scatter','power-dynamo','combat-top',[['support-right','support-arm-light'],['cab-accessory-top','support-sensor']],'mustard','charcoal'],
+ ['06 / WALKING CANNON','frame-wedge','cab-armored','mobility-low-gb','gun-cannon','power-forge','combat-top',[['weapon-shield','support-shield'],['support-left','support-arm-light']],'cream','slate'],
+ ['07 / MAINTENANCE WALKER','frame-sr','cab-cyclops','legs-yard','gun-short','power-dynamo','combat-right',[['support-left','support-arm-heavy'],['support-rear','support-cooler']],'cream','safety'],
  ['08 / COMPACT SCOUT','frame-wedge','cab-cyclops','mobility-low-gb','gun-short','power-air','combat-right',[['support-right','support-sensor']],'white','rust'],
- ['09 / SCRAPYARD DERBY','frame-sr','cab-armored','legs-yard','gun-rivet','power-forge','combat-left',[['support-right','support-shield'],['support-rear','support-ammo']],'slate','red'],
- ['10 / WORKING CLASS','frame-utility','cab-cyclops','legs-yard','gun-scatter','power-dynamo','combat-right',[['support-left','support-arm'],['support-roof','support-cooler']],'rust','cream']
+ ['09 / SCRAPYARD DERBY','frame-sr','cab-armored','legs-yard','gun-rivet','power-forge','combat-left',[['support-right','support-arm-heavy'],['support-rear','support-ammo']],'slate','red'],
+ ['10 / WORKING CLASS','frame-utility','cab-cyclops','legs-yard','gun-scatter','power-dynamo','combat-right',[['support-left','support-arm-heavy'],['support-roof','support-cooler']],'rust','cream']
 ];
 export const RECIPES=variants.map(v=>({id:v[0].slice(0,2),name:v[0]}));
 export function recipe(index){
