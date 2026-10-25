@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#f3f3ee"/>
   <title>M3CH4 / Graybox Construction</title>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
-  <link rel="stylesheet" href="./graybox.css?v=g14"/>
+  <link rel="stylesheet" href="./graybox.css?v=g15"/>
 </head>
 <body>
 <header class="topbar">
   <div><div class="eyebrow">M3CH4 / EXPERIMENTAL WORKSHOP</div>
-  <h1>GRAYBOX BUILDER <span>14 / ARCHITECTURE</span></h1></div>
+  <h1>GRAYBOX BUILDER <span>15 / MECHANICAL FIT</span></h1></div>
   <a href="./index.html">Detailed lab ↗</a>
 </header>
 <main>
@@ -37,6 +37,7 @@
       <button class="tab active" data-tab="parts">BUILD</button>
       <button class="tab" data-tab="looks">FORM + FINISH</button>
       <button class="tab" data-tab="reference">10 REFS</button>
+      <button class="tab" data-tab="audit">PART AUDIT</button>
     </div>
     <section id="parts-panel" class="panel">
       <p class="helper">Choose a complete assembly, then tap a compatible socket or one of its attachment locations. Technical internals remain in the detailed lab.</p>
@@ -51,6 +52,11 @@
       <p class="helper">Ten reference-inspired starting points built from the <b>same</b> small catalogue. They are silhouette experiments, not exact recreations.</p>
       <div id="recipes"></div>
     </section>
+    <section id="audit-panel" class="panel" hidden>
+      <p class="helper">Inspect one catalogue assembly without a complete mech hiding its structure. Rotate it and compare bare, protected and fully encased geometry.</p>
+      <div id="audit-controls"></div>
+      <div id="audit-notes" class="subnote"></div>
+    </section>
     <footer class="bottom">
       <p id="status" role="status" aria-live="polite">Ready for construction.</p>
       <div class="actions">
@@ -59,10 +65,10 @@
         <button id="import">IMPORT</button>
         <input id="file" type="file" accept=".json,application/json" hidden/>
       </div>
-      <p class="disclaimer">Stage 14 architectural experiment · Five mandatory stations preserved · New carriers, housings, compact legs and crawler are visual construction prototypes, not live combat gameplay.</p>
+      <p class="disclaimer">Stage 15 mechanical-fit workshop · Five mandatory stations preserved · New carriers, housings, compact legs and crawler are visual construction prototypes, not live combat gameplay.</p>
     </footer>
   </aside>
 </main>
-<script type="module" src="./graybox.js?v=g14"></script>
+<script type="module" src="./graybox.js?v=g15"></script>
 </body>
 </html>
