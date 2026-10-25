@@ -42,9 +42,9 @@ export function validateGrounding(g){
   }
   return {valid:errors.length===0,errors};
 }
-function clampAngles(side,p,strict){
+function clampAngles(side,p,strict,limitsForSide=null){
   for(const joint of ['hip','knee','ankle']){
-    const k=side+':'+joint,lim=JOINT_LIMITS[joint];
+    const k=side+':'+joint,lim=limitsForSide?.(side,joint)||JOINT_LIMITS[joint];
     if(strict&&(p[k]<lim.min-.001||p[k]>lim.max+.001))return false;
     p[k]=round(clamp(p[k],lim.min,lim.max));
   }
@@ -55,7 +55,9 @@ function clampAngles(side,p,strict){
  * A future shin with new length can supply its own geometry via the graph.
  * The same analytic equation applies; no paired-parts special animation.
  */
-export function solveGroundedRig(grounding,{upperLowerForSide=null,strict=true}={}){
+export function solveGroundedRig(grounding,{
+  upperLowerForSide=null,limitsForSide=null,validateCandidate=null,strict=true
+}={}){
   const check=validateGrounding(grounding);
   if(!check.valid)return {ok:false,reason:check.errors.join('; ')};
   if(grounding.mode==='manual')return {ok:true,pose:null,grounding};
@@ -82,7 +84,7 @@ export function solveGroundedRig(grounding,{upperLowerForSide=null,strict=true}=
     pose[side+':hip']=round(solved.hip*RAD);
     pose[side+':knee']=round(solved.knee*RAD);
     pose[side+':ankle']=round(-(solved.hip+solved.knee)*RAD);
-    if(!clampAngles(side,pose,strict))
+    if(!clampAngles(side,pose,strict,limitsForSide))
       return {ok:false,reason:side+' foot target exceeds a joint limit'};
     contacts.push({side,planted:foot.planted,worldZ:foot.z,
       groundY:foot.y,reachM:solved.reach,
@@ -91,8 +93,10 @@ export function solveGroundedRig(grounding,{upperLowerForSide=null,strict=true}=
   }
   const limits=validatePose(pose);
   if(!limits.valid)return {ok:false,reason:limits.errors.join('; ')};
-  const report=articulationReport({labPose:pose});
-  if(strict&&!report.valid)return {ok:false,reason:report.errors.concat(report.warnings).join('; ')};
+  const verdict=validateCandidate?.(pose);
+  if(strict&&verdict&&!verdict.ok)return {ok:false,reason:verdict.reason};
+  const report=validateCandidate?null:articulationReport({labPose:pose});
+  if(strict&&report&&!report.valid)return {ok:false,reason:report.errors.concat(report.warnings).join('; ')};
   return {ok:true,pose,grounding:structuredClone(grounding),contacts,report};
 }
 export function applyGrounding(assembly,targets,opts={}){
