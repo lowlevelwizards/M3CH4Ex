@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#f4f5f2"/>
   <title>M3CH4 / Universal Construction Lab</title>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
-  <link rel="stylesheet" href="./constructionLab.css?v=s10"/>
+  <link rel="stylesheet" href="./constructionLab.css?v=s11"/>
 </head>
 <body>
   <header class="topbar">
-    <div><div class="eyebrow">M3CH4 / EXPERIMENT</div><h1>CONSTRUCTION LAB <span>STAGE 10</span></h1></div>
+    <div><div class="eyebrow">M3CH4 / EXPERIMENT</div><h1>CONSTRUCTION LAB <span>STAGE 11</span></h1></div>
     <div class="top-actions">
       <button id="reset" type="button" title="Restore a stock test rig">Reset rig</button>
       <a href="https://lowlevelwizards.github.io/M3CH4/" title="Open the production game">LIVE M3CH4 ↗</a>
@@ -39,9 +39,10 @@
         <button data-tab="tree" aria-pressed="false">ASSEMBLY</button>
         <button data-tab="inspect" aria-pressed="false">INSPECT</button>
         <button data-tab="pose" aria-pressed="false">POSE</button>
+        <button data-tab="manip" aria-pressed="false">MANIPULATOR</button>
       </div>
       <section id="catalog-panel" class="panel">
-        <p class="explain">Select MOBILITY to interchange structural links, rotary bearings and two-ended hydraulic drives. POSE shows limits imposed by the installed mechanisms.</p>
+        <p class="explain">Construct a modular Yardwalker or open MANIPULATOR to mount a non-leg mechanism using the exact same universal bearings and hydraulic drives.</p>
         <div id="slots" class="slot-row" aria-label="Assembly type"></div>
         <div id="catalog" class="catalog-list"></div>
       </section>
@@ -57,6 +58,10 @@
         <p class="explain">Posing uses installed link geometry, bearing travel and real actuator stroke. A removed drive leaves the joint unpowered; compatible bearings and cylinders restore movement.</p>
         <div id="pose-controls"></div>
       </section>
+      <section id="manip-panel" class="panel" hidden>
+        <p class="explain">One independent industrial arm. The structural links, B-series rotary bearing and P-series linear drive connect through the same typed mechanical ports used by the legs.</p>
+        <div id="manip-controls"></div>
+      </section>
       <footer class="sidebar-foot">
         <div id="stats"></div>
         <div id="verdict" role="status" aria-live="polite"></div>
@@ -65,6 +70,6 @@
       </footer>
     </aside>
   </main>
-  <script type="module" src="./constructionLab.js?v=s10"></script>
+  <script type="module" src="./constructionLab.js?v=s11"></script>
 </body>
 </html>
