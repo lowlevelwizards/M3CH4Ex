@@ -31,6 +31,7 @@ const grid=new THREE.GridHelper(20,20,0xbec6be,0xdde3dc);
 grid.position.y=-.035;grid.material.transparent=true;grid.material.opacity=.28;scene.add(grid);
 const focus=new THREE.Vector3(0,1.85,0);
 let azimuth=-.7,elevation=.24,distance=7.2,body=null,liveSockets=[];
+let currentView='quarter',userZoom=false;
 function updateCamera(){
  elevation=Math.max(-.30,Math.min(1.45,elevation));
  camera.position.copy(focus).add(new THREE.Vector3(
@@ -42,9 +43,25 @@ function updateCamera(){
 }
 updateCamera();
 function setView(which){
- const poses={quarter:[-.75,.23,7.6],front:[0,.08,7.5],
-  side:[Math.PI/2,.08,7.9],top:[-.38,1.4,7.9]};
- [azimuth,elevation,distance]=poses[which];updateCamera();
+ currentView=which;userZoom=false;
+ const poses={quarter:[-.75,.23],front:[0,.08],
+  side:[Math.PI/2,.08],top:[-.38,1.4]};
+ [azimuth,elevation]=poses[which];framePreview();
+}
+function framePreview(){
+ if(!body)return;
+ const bounds=new THREE.Box3().setFromObject(body,true);
+ if(bounds.isEmpty())return;
+ const size=bounds.getSize(new THREE.Vector3());
+ focus.copy(bounds.getCenter(new THREE.Vector3()));
+ focus.y=Math.max(.7,focus.y);
+ const aspect=stage.clientWidth/Math.max(stage.clientHeight,1);
+ const vert=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+ const h=Math.max(size.y/2,1);
+ const w=Math.max(size.x/2,size.z*.41,.85);
+ const needed=Math.max(h/vert,w/(vert*Math.max(.68,aspect)));
+ if(!userZoom)distance=Math.max(3.6,Math.min(10.2,needed*1.24));
+ updateCamera();
 }
 function status(message,bad=false){
  $('status').textContent=message;$('status').style.color=bad?'#a84f37':'#537965';
@@ -65,7 +82,7 @@ function refreshStage(){
  const result=buildGrayboxScene(model,{socketVisible,
    highlightCategory:pending?.category,highlightPart:pending?.id});
  body=result.root;liveSockets=result.sockets;
- scene.add(body);
+ scene.add(body);framePreview();
 }
 function button(label,callback,options={}){
  const b=document.createElement('button');b.type='button';
@@ -90,7 +107,9 @@ function buildAssessment(){
  }
  if(chk.experimental){
   const warning=document.createElement('div');warning.className='subnote';
-  warning.textContent='Crawler is a graybox topology prototype; not integrated into live locomotion.';
+  warning.textContent=model.installed.mobility?.id==='mobility-quad-gb'?
+   'Crawler is a four-point topology prototype; not live locomotion.':
+   'Stubber is a compact biped visual prototype; not live locomotion.';
   target.append(warning);
  }
  const state=$('pending');
@@ -380,6 +399,7 @@ stage.addEventListener('pointermove',e=>{
  p.x=e.clientX;p.y=e.clientY;
  if(Math.hypot(p.x-p.sx,p.y-p.sy)>7)p.moved=true;
  if(pointers.size===2){
+  userZoom=true;
   const now=center();if(pinch)distance=Math.max(3,Math.min(16,
    distance*pinch.spread/Math.max(now.spread,1)));pinch=now;
  }else{
@@ -406,7 +426,8 @@ stage.addEventListener('pointerup',e=>{
 });
 stage.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);pinch=null;});
 stage.addEventListener('wheel',e=>{
- e.preventDefault();distance=Math.min(16,Math.max(3,distance*Math.exp(e.deltaY*.001)));
+ e.preventDefault();userZoom=true;
+ distance=Math.min(16,Math.max(3,distance*Math.exp(e.deltaY*.001)));
  updateCamera();
 },{passive:false});
 function resize(){
