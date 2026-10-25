@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#f3f3ee"/>
+  <title>M3CH4 / Graybox Construction</title>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
+  <link rel="stylesheet" href="./graybox.css?v=g12c"/>
+</head>
+<body>
+<header class="topbar">
+  <div><div class="eyebrow">M3CH4 / EXPERIMENTAL WORKSHOP</div>
+  <h1>GRAYBOX BUILDER <span>12 / FOUNDATIONS</span></h1></div>
+  <a href="./index.html">Detailed lab ↗</a>
+</header>
+<main>
+  <section class="viewer" aria-label="Graybox 3D mech preview">
+    <div class="viewport-head">
+      <span>SHAPE · SOCKETS · SILHOUETTE</span>
+      <button id="socket-toggle" type="button" aria-pressed="false">SHOW SOCKETS</button>
+    </div>
+    <div id="gb-viewport" aria-label="Orbit view, drag to rotate and pinch to zoom"></div>
+    <div class="view-controls">
+      <button id="gb-quarter">3/4</button><button id="gb-front">FRONT</button>
+      <button id="gb-side">SIDE</button><button id="gb-top">TOP</button>
+    </div>
+    <div id="pending" class="pending" hidden></div>
+  </section>
+  <aside>
+    <div class="guide">
+      <div class="eyebrow">COMBAT MACHINE · FIVE REQUIRED STATIONS</div>
+      <div class="required-line"><span>FRAME</span><span>CAB</span><span>COMBAT</span><span>MOBILITY</span><span>POWER</span></div>
+      <div id="assessment"></div>
+    </div>
+    <div class="section-head">
+      <button class="tab active" data-tab="parts">BUILD</button>
+      <button class="tab" data-tab="looks">ARMOR + PAINT</button>
+      <button class="tab" data-tab="reference">10 REFS</button>
+    </div>
+    <section id="parts-panel" class="panel">
+      <p class="helper">Choose a complete assembly, then tap a compatible socket or one of its attachment locations. Technical internals remain in the detailed lab.</p>
+      <div id="stations"></div>
+      <div id="choices"></div>
+    </section>
+    <section id="looks-panel" class="panel" hidden>
+      <p class="helper">Protective coverage and color are assembly-level decisions. Detailed individual armor panels can come later.</p>
+      <div id="appearance"></div>
+    </section>
+    <section id="reference-panel" class="panel" hidden>
+      <p class="helper">Ten reference-inspired starting points built from the <b>same</b> small catalogue. They are silhouette experiments, not exact recreations.</p>
+      <div id="recipes"></div>
+    </section>
+    <footer class="bottom">
+      <p id="status" role="status" aria-live="polite">Ready for construction.</p>
+      <div class="actions">
+        <button id="reset">RESET</button>
+        <button id="export">EXPORT JSON</button>
+        <button id="import">IMPORT</button>
+        <input id="file" type="file" accept=".json,application/json" hidden/>
+      </div>
+      <p class="disclaimer">Experimental visual builder · Existing M3CH4 combat definitions reused where available · Crawler/extra body styles are graybox prototypes, not implemented combat locomotion.</p>
+    </footer>
+  </aside>
+</main>
+<script type="module" src="./graybox.js?v=g12c"></script>
+</body>
+</html>
