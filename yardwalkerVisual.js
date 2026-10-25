@@ -183,6 +183,10 @@ export function buildPylonExtendedShin(side,ankleReceiver){
     const lower=end.map(v=>v*.78);
     block(root,'Pylon-L1-lower-drive-cover',
         [lower[0],lower[1],lower[2]-.055],[.31,.21,.19],'teal');
+    // Ties the two load-carrying spars together without covering the exposed drive.
+    const brace=end.map(v=>v*.62);
+    block(root,'Pylon-L1-midspan-crossbrace',
+        [brace[0],brace[1],brace[2]+.08],[.32,.07,.09],'iron');
     return root;
 }
 /** Unrated fixed guides, never second independent mounting sockets. */
