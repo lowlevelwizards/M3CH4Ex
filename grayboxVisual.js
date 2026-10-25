@@ -436,7 +436,7 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
  // the native mobility crown rather than sitting on a disconnected neck.
  const height=mobilityBounds?mobilityBounds.max.y-mobilityBounds.min.y:1.57;
  const stance=state.form?.stance||'normal';
- const drop=stance==='low'?.15:stance==='tall'?-.20:0;
+ const drop=stance==='low'?.115:stance==='tall'?-.20:0;
  if(drop<0)body.add(buildFrameRiser(frameBounds,drop,paint));
  const frameY=height-.07-frameBounds.min.y-drop;
  body.position.y=frameY;root.add(body);
