@@ -3,6 +3,8 @@
  * Angles are degrees and intentionally do not imply powered locomotion.
  */
 import {YARDWALKER_LAYOUT} from './mobilityDefinitions.js';
+import {installedDevice,installedSection,deviceBinding} from './constructionMechanisms.js';
+import {BY_ID} from './components.js';
 export const ARTICULATION_SIDES=Object.freeze(['left','right']);
 export const ARTICULATION_JOINTS=Object.freeze(['hip','knee','ankle']);
 export const JOINT_LIMITS=Object.freeze({
@@ -48,14 +50,42 @@ export function posePreset(name){
   }else throw new Error('Unknown pose preset');
   return base;
 }
-export function validatePose(input){
+export function jointLimitsFor(assembly,side,joint){
+  if(joint!=='knee'||!assembly?.owned)return JOINT_LIMITS[joint];
+  const bearing=installedDevice(assembly,side,'bearing');
+  return bearing?.definition.range||JOINT_LIMITS.knee;
+}
+export function jointWorkingRange(assembly,side,joint){
+  const bearing=jointLimitsFor(assembly,side,joint);
+  if(joint!=='knee'||!assembly?.owned)return {...bearing,powered:true,limiter:'joint'};
+  const drive=installedDevice(assembly,side,'actuator');
+  if(!drive||!deviceBinding(assembly,side))
+    return {...bearing,powered:false,limiter:'actuator absent'};
+  const angles=[];
+  for(let angle=bearing.min;angle<=bearing.max;angle+=1){
+    const check=actuatorStrokeCheck(side,angle,assembly);
+    if(check.valid)angles.push(angle);
+  }
+  if(!angles.length)return {min:0,max:0,powered:false,
+    limiter:'no stroke within bearing limits',axis:bearing.axis};
+  // Only expose the continuous reachable interval encompassing neutral pose.
+  const middle=angles.reduce((a,v)=>Math.abs(v)<Math.abs(a)?v:a,angles[0]);
+  let start=angles.indexOf(middle),end=start;
+  while(start>0&&angles[start]-angles[start-1]===1)start--;
+  while(end<angles.length-1&&angles[end+1]-angles[end]===1)end++;
+  return {min:angles[start],max:angles[end],powered:true,
+    axis:bearing.axis,limiter:angles[start]>bearing.min||angles[end]<bearing.max
+      ?'linear actuator stroke':'rotary bearing'};
+}
+export function validatePose(input,assembly=null){
   const errors=[];
   if(!input||typeof input!=='object'||Array.isArray(input))
     return {valid:false,errors:['Pose must be an object']};
   const keys=Object.keys(neutralPose());
   if(Object.keys(input).some(k=>!keys.includes(k)))errors.push('Unknown pose channel');
   for(const key of keys){
-    const v=input[key],joint=key.split(':')[1],limit=JOINT_LIMITS[joint];
+    const v=input[key],side=key.split(':')[0],joint=key.split(':')[1],
+      limit=jointLimitsFor(assembly,side,joint);
     if(!Number.isFinite(v)||v<limit.min||v>limit.max)
       errors.push(key+' must remain in '+limit.min+'° to '+limit.max+'°');
   }
@@ -67,17 +97,18 @@ export function currentPose(assembly){
 export function setJointAngle(assembly,side,joint,degrees){
   if(!ARTICULATION_SIDES.includes(side)||!ARTICULATION_JOINTS.includes(joint))
     return {ok:false,reason:'Unknown mechanical joint'};
-  if(!Number.isFinite(degrees)||degrees<JOINT_LIMITS[joint].min||degrees>JOINT_LIMITS[joint].max)
-    return {ok:false,reason:'Joint exceeds authored mechanical limits'};
+  const range=jointWorkingRange(assembly,side,joint);
+  if(!Number.isFinite(degrees)||degrees<range.min||degrees>range.max)
+    return {ok:false,reason:'Joint exceeds '+range.limiter+' range ('+range.min+'° to '+range.max+'°)'};
   const next={...currentPose(assembly),[signature(side,joint)]:degrees};
-  const verdict=validatePose(next);
+  const verdict=validatePose(next,assembly);
   if(!verdict.valid)return {ok:false,reason:verdict.errors.join('; ')};
   assembly.labPose=next;
   return {ok:true,angle:degrees};
 }
 export function applyPosePreset(assembly,name){
   try{
-    const pose=posePreset(name),check=validatePose(pose);
+    const pose=posePreset(name),check=validatePose(pose,assembly);
     if(!check.valid)return {ok:false,reason:check.errors.join('; ')};
     assembly.labPose=pose;return {ok:true,pose};
   }catch(error){return {ok:false,reason:error.message};}
@@ -91,30 +122,52 @@ function rotatedX(v,degrees){
 /** Physical stroke is derived from both moving attachment points. This check
  * works independent of the browser's Three.js rendering.
  */
-export function actuatorEndpoints(side,kneeAngle){
+export function actuatorEndpoints(side,kneeAngle,assembly=null){
   if(!ARTICULATION_SIDES.includes(side)||!Number.isFinite(kneeAngle))
     throw new Error('Invalid actuator configuration');
   const leg=YARDWALKER_LAYOUT.legs.find(l=>l.side===(side==='left'?-1:1));
-  const upper=[...leg.actuatorTop];
-  const local=[leg.side*ACTUATOR_SPEC.lowerOutboardM,
-    ACTUATOR_SPEC.lowerFromKnee[1],ACTUATOR_SPEC.lowerFromKnee[2]];
-  const lower=add(leg.knee,rotatedX(local,kneeAngle));
+  const thigh=assembly?.owned&&installedSection(assembly,side,'thigh');
+  const thighDef=BY_ID.get(thigh?.definitionId);
+  const kneeRelative=thighDef?.sockets?.find(s=>s.id==='knee')?.position||
+    sub(leg.knee,leg.hip);
+  const drive=assembly?.owned&&installedDevice(assembly,side,'actuator');
+  const lowerOffset=drive?.definition.secondAnchorOffset||ACTUATOR_SPEC.lowerFromKnee;
+  const upper=sub(leg.actuatorTop,leg.hip);
+  const local=[leg.side*ACTUATOR_SPEC.lowerOutboardM,lowerOffset[1],lowerOffset[2]];
+  const lower=add(kneeRelative,rotatedX(local,kneeAngle));
   return {upper,lower,lengthM:Math.hypot(...sub(lower,upper))};
 }
-export function actuatorStrokeCheck(side,angle){
-  const data=actuatorEndpoints(side,angle);
-  return {...data,valid:data.lengthM>=ACTUATOR_SPEC.minLengthM-1e-6&&
-    data.lengthM<=ACTUATOR_SPEC.maxLengthM+1e-6,
-    extensionM:data.lengthM-ACTUATOR_SPEC.housingLengthM};
+export function actuatorStrokeCheck(side,angle,assembly=null){
+  const data=actuatorEndpoints(side,angle,assembly);
+  const drive=assembly?.owned&&installedDevice(assembly,side,'actuator');
+  const stroke=drive?.definition.stroke||{min:ACTUATOR_SPEC.minLengthM,
+    max:ACTUATOR_SPEC.maxLengthM,housing:ACTUATOR_SPEC.housingLengthM};
+  return {...data,valid:data.lengthM>=stroke.min-1e-6&&
+    data.lengthM<=stroke.max+1e-6,
+    extensionM:data.lengthM-stroke.housing,
+    mechanism:drive?.definition.name||'reference utility drive',
+    serial:drive?.serial||null};
 }
 export function articulationReport(assembly){
-  const pose=currentPose(assembly),joints=validatePose(pose),warnings=[],stroke=[];
+  const pose=currentPose(assembly),joints=validatePose(pose,assembly),
+    warnings=[],stroke=[],range=[],errors=[...joints.errors];
   for(const side of ARTICULATION_SIDES){
-    const angle=pose[signature(side,'knee')];
-    const test=actuatorStrokeCheck(side,angle);
-    stroke.push({side,angle,lengthM:test.lengthM,extensionM:test.extensionM,valid:test.valid});
-    if(!test.valid)warnings.push(side+' knee: actuator outside stroke envelope');
+    const angle=pose[signature(side,'knee')],drive=assembly?.owned?
+      installedDevice(assembly,side,'actuator'):null;
+    const bearing=assembly?.owned?installedDevice(assembly,side,'bearing'):null;
+    const limits=jointWorkingRange(assembly,side,'knee');
+    range.push({side,...limits,bearing:bearing?.definition.name||'reference bearing'});
+    if(assembly?.owned&&(!drive||!deviceBinding(assembly,side))){
+      warnings.push(side+' knee: linear actuator disconnected; powered posing unavailable');
+      stroke.push({side,angle,lengthM:0,extensionM:0,valid:false,unpowered:true});
+      continue;
+    }
+    const test=actuatorStrokeCheck(side,angle,assembly);
+    stroke.push({side,angle,lengthM:test.lengthM,extensionM:test.extensionM,
+      valid:test.valid,serial:test.serial,mechanism:test.mechanism});
+    if(!test.valid)errors.push(side+' '+test.mechanism+' exceeds physical stroke at '+angle+'°');
   }
-  return {valid:joints.valid&&warnings.length===0,errors:joints.errors,warnings,stroke,
-    collisionStatus:'Conservative clearance visualization only; precise swept-mesh collision not evaluated'};
+  return {valid:errors.length===0,errors,warnings,stroke,range,
+    powered:stroke.every(item=>item.valid),
+    collisionStatus:'Conservative clearance hints, not swept-mesh contact'};
 }
