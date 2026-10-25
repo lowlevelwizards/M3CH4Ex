@@ -34,6 +34,12 @@ The root `index.html` is the white construction studio; it is not the combat gam
 - **Stage 09**: Forge T2 compact upper leg (75 mm shorter, 125 kg) and Dockpad F2 wide stabilizer foot (40 mm deeper contact sole, 69 kg), alongside all three shin options
 - **Stage 09**: joint coordinates and planted-foot height are measured from the installed thigh, shin and foot, including a shared chassis-height baseline for uneven leg lengths
 - **Stage 09**: validated v7 blueprints preserve original serials, interchange configurations, grounded targets and stored owned parts
+- **Stage 10**: the same rotary-bearing and linear-actuator catalogue definitions can serve any compatible joint or mechanism port—not knee-specific IDs
+- **Stage 10**: physically serviceable and individually serial-owned B-40/B-62 rotary bearings and P-48/P-70 hydraulic drives, with two independently mounted copies per design
+- **Stage 10**: each installed bearing dictates its angular envelope; the two-ended actuator's physical stroke and its actual thigh/shin clevis positions further constrain powered movement
+- **Stage 10**: removing a drive leaves a valid but unpowered mechanism; reinserting the owned drive restores assisted movement
+- **Stage 10**: structural links are defined as reusable rigid-link interfaces; thigh and shin are the present INSTALLATION ROLES rather than universal-purpose restrictions
+- **Stage 10**: validated v8 blueprints preserve mechanism assignments, detached owned parts, serials, coupled endpoints and mechanical poses
 - Isolate / explode previews, JSON blueprint export and import
 - Assembly and blueprint unit tests
 
@@ -103,3 +109,23 @@ The geometry tests confirm planted ankle Y/Z positions under crouch, one-foot st
 **Architecture:** `proposeComponentReplacement()` in `assemblyGraph.js` is the reusable graph primitive. It knows nothing about shin IDs or the preset pairs: both upstream and child-facing typed interfaces must match, and all socket capacities are validated. `replaceAnatomyComponent()` applies that proposal transactionally while preserving old parts in the owned tray.
 
 **Limits:** This is an interchangeability laboratory, not a universal drag-and-drop mechanism. The new pieces use Yardwalker-compatible medium interfaces. Arbitrary connectors, adapters, precise swept-volume collisions, dynamic balance, foot load forces, independent paint and service records are separate future stages. The live combat repository is unchanged.
+
+## Stage 10 — Functional, reusable mechanical hardware
+
+**Design principle:** a bearing is a `rotary-bearing`; an actuator is a `linear-actuator`; a generic rigid strut is a `structural-link`. A part does not become a different design merely because it is installed at a knee rather than an elbow. The currently installed anatomy and the parent's typed sockets determine its role. Only genuinely anatomical or special-case components should declare restricted usage. The test lab presently authors those ports on Yardwalker's knees and thighs; elbow, shoulder, hand and additional arbitrary placements are not yet instantiated.
+
+### Try it
+
+1. Open **CATALOGUE → MOBILITY**, expand a leg, and find **ROTARY JOINT** and **LINEAR DRIVE** below thigh/shin/foot options.
+2. Replace **B-40 Utility Rotary Bearing** with **B-62 Wide-Swing Rotary Bearing**. Inspect the new bearing model, 16 kg mass and widened bearing limits.
+3. Leave **P-48 Utility Linear Drive** installed and inspect **POSE**. Its shorter physical stroke prevents exploiting the bearing's full range.
+4. Replace it with **P-70 Extended-Travel Drive**. Its broader stroke and different lower-clevis anchor unlock deeper knee bending, subject to the actual articulated geometry.
+5. Remove the drive. The bearing stays owned and mechanically present, but the guided crouch and walking preview reject an **unpowered** configuration. Reinstall the drive using the same serial.
+6. Try one side B-62/P-70 and the other side B-40/P-48. Export a v8 blueprint, import and verify each physical device, linkage connection and pose.
+7. Detach/reinstall the whole leg: serial-owned mechanisms remain part of your inventory and reconnect when the structural assembly returns.
+
+**Important boundaries:** this is functional kinematic compatibility, not a fluid-pressure solver, actuator force/power calculation, or balance simulation. A linear drive has a single structural parent at the host link's `drive-mount` socket and a validated *second mechanical endpoint* on another moving component. It does not acquire a fictitious second parent in the structural graph. Physical linkages use measured local anchors for both the visual actuator and the range solver. No full swept-volume collision solver or torque limits yet.
+
+**Engineering architecture:** generic hardware definitions are in `constructionMechanisms.js` and remain location-independent. `constructionArticulation.js` derives limits and stroke from active device serials. `constructionGroundedPose.js` and its lab adapter reject unattainable or unpowered foot targets, without silently clipping. `assemblyGraph.js` validates role/standard compatibility on physical mounting ports.
+
+**Compatibility:** v1–v7 blueprints still import. v8 adds the mechanism ownership/binding fields. Source changes are confined to M3CH4Ex; the live M3CH4 game is unaffected.
