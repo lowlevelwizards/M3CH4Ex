@@ -15,8 +15,10 @@ const server=createServer(async(req,res)=>{
   const full=resolve(ROOT,'.'+(pathname==='/'?'/index.html':pathname));
   if(!full.startsWith(ROOT+sep))throw Error('Outside test root');
   let data=await readFile(full);
-  if(pathname==='/'||pathname==='/index.html')
-   data=Buffer.from(data.toString().replace(
+  // Every HTML entrypoint uses the same pinned local Three.js in browser
+  // smoke, including the new default yard and retained detailed mechanism lab.
+  if(extname(full)==='.html')
+   data=Buffer.from(data.toString().replaceAll(
     'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js',
     '/node_modules/three/build/three.module.js'));
   res.writeHead(200,{'Content-Type':mime[extname(full)]||'application/octet-stream'});
@@ -34,6 +36,10 @@ page.on('console',msg=>{if(msg.type()==='error')errors.push('CONSOLE '+msg.text(
 page.on('requestfailed',request=>errors.push('REQUEST '+request.url()+' '+request.failure()?.errorText));
 try{
  await page.goto('http://127.0.0.1:'+port+'/',{waitUntil:'load',timeout:30000});
+ await page.waitForURL('**/graybox.html');
+ assert.equal(await page.locator('#gb-viewport canvas').count(),1,
+  'Home page must now open the unified garage/range');
+ await page.goto('http://127.0.0.1:'+port+'/detailed-lab.html',{waitUntil:'load',timeout:30000});
  await page.waitForTimeout(900);
  const snapshot=await page.evaluate(()=>({
   stats:document.getElementById('stats')?.textContent,
@@ -135,6 +141,29 @@ try{
  assert.match(await page.locator('#assessment').innerText(),/Stubber is a compact biped/i);
  assert.deepEqual(errors,[],'Stage 15 mobile reference framing errors');
  console.log('STAGE15_AUDIT_BROWSER_OK');
+ // Stage 17 acceptance: actually pilot the SAME experimental constructor
+ // scene, then return to the garage with its complete blueprint preserved.
+ await page.locator('#reset').click();
+ const beforePilot=await page.evaluate(()=>localStorage.getItem('m3ch4-graybox-v1'));
+ const originalCanvas=await page.locator('#gb-viewport canvas').elementHandle();
+ await page.getByRole('button',{name:'DEPLOY THIS EXACT MECH'}).click();
+ await page.waitForTimeout(220);
+ assert.equal(await page.locator('#yard-hud').isVisible(),true,
+  'Deployment must enter the integrated scene, not navigate to the old game');
+ assert.equal(await page.locator('#yard-garage').isVisible(),true);
+ assert.equal(await page.locator('#yard-fire').isVisible(),true);
+ await page.keyboard.down('w');await page.waitForTimeout(200);await page.keyboard.up('w');
+ await page.locator('#yard-fire').click();
+ await page.locator('#yard-garage').click();
+ await page.waitForTimeout(200);
+ assert.equal(await page.locator('#yard-hud').isVisible(),false);
+ assert.equal(await page.locator('#gb-viewport canvas').elementHandle().then(
+  el=>el.evaluate((canvas,original)=>canvas===original,originalCanvas)),true,
+  'Pilot/garage must reuse the existing WebGL canvas');
+ assert.equal(await page.evaluate(()=>localStorage.getItem('m3ch4-graybox-v1')),
+  beforePilot,'Pilot/garage must preserve exact experimental blueprint');
+ assert.deepEqual(errors,[],'Stage 17 integrated yard startup/movement errors');
+ console.log('STAGE17_SAME_MACHINE_YARD_OK');
  console.log('GRAYBOX_BROWSER_SMOKE_OK');
  console.log('BROWSER_SMOKE_OK');
 }finally{

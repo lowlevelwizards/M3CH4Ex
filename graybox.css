@@ -61,3 +61,39 @@ label{font-size:12px;color:#44564a}select{padding:9px;width:100%;border:1px soli
 }
 
 #audit-controls label{display:block;margin:10px 0}#audit-notes{padding:12px;background:#eef2eb;border-radius:10px;margin-top:12px;line-height:1.65}
+
+/* Stage 17: real construction bay and range share the same full 3D viewport. */
+.yard-driving main{height:calc(100dvh - 66px)}
+.yard-driving .viewer{height:100%;max-height:none;flex:1}
+.yard-driving aside{display:none}
+.yard-driving .view-controls,.yard-driving .pending,.yard-driving .viewport-head{display:none}
+#yard-hud[hidden]{display:none!important}
+#yard-hud{position:absolute;inset:0;z-index:5;pointer-events:none;color:#f5f0dc;font:700 11px ui-sans-serif,system-ui,sans-serif;text-shadow:0 1px 3px #0e201e}
+#yard-hud button{pointer-events:auto;background:#20332edc;color:#fff6e5;border:1px solid #d3a34b99;min-height:40px}
+.yard-topline{position:absolute;top:10px;left:10px;right:10px;display:flex;align-items:center;justify-content:space-between;gap:7px;background:#162723c5;border:1px solid #b2a57666;border-radius:10px;padding:5px 7px;font-weight:850;letter-spacing:.04em}
+.yard-topline span{flex:1;text-align:center;white-space:nowrap}
+.yard-tools{position:absolute;left:12px;top:66px;display:flex;gap:6px}
+.yard-tools button{font-size:10px;min-height:33px;padding:6px 9px}
+#yard-readout{position:absolute;bottom:12px;left:28%;right:25%;text-align:center;background:#172823b8;border-radius:9px;padding:8px;line-height:1.2}
+#yard-move-pad{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:max(17px,env(safe-area-inset-bottom));width:132px;height:132px;pointer-events:auto;touch-action:none;border:2px solid #e5e3c087;border-radius:50%;background:#1b292986;display:flex;align-items:center;justify-content:center;user-select:none}
+#yard-move-pad:before,#yard-move-pad:after{content:'';position:absolute;background:#e9e5c137;pointer-events:none}
+#yard-move-pad:before{width:1px;height:80%;left:50%}
+#yard-move-pad:after{height:1px;width:80%;top:50%}
+#yard-move-pad span{position:absolute;bottom:11px;font-size:8px;letter-spacing:.2em}
+#yard-thumb{width:52px;height:52px;border-radius:50%;background:#d6a54bb8;border:2px solid #fbf0c2;z-index:1;pointer-events:none}
+#yard-fire{position:absolute;bottom:max(24px,env(safe-area-inset-bottom));right:max(20px,env(safe-area-inset-right));width:92px;height:92px;border-radius:50%;font-size:17px;font-weight:900;background:#aa5c2fe8!important;touch-action:none;user-select:none}
+.yard-aim-hint{position:absolute;right:12px;bottom:130px;opacity:.76;font-size:9px}
+body.yard-driving #gb-viewport{touch-action:none}
+@media(max-width:760px){
+ .yard-driving main{height:calc(100dvh - 58px)}
+ .yard-driving .viewer{height:100%!important;max-height:none!important}
+ .yard-topline{top:5px;left:5px;right:5px;font-size:9px;padding:3px}
+ .yard-topline button{font-size:10px;padding:5px;min-height:34px}
+ .yard-tools{top:48px;left:5px;gap:4px}
+ .yard-tools button{font-size:9px;padding:5px}
+ #yard-move-pad{width:112px;height:112px}
+ #yard-thumb{width:44px;height:44px}
+ #yard-fire{width:82px;height:82px;right:12px;bottom:14px}
+ .yard-aim-hint{right:8px;bottom:108px;font-size:8px}
+ #yard-readout{bottom:7px;left:31%;right:26%;font-size:9px}
+}

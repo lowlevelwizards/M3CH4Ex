@@ -4,23 +4,41 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <meta name="theme-color" content="#f3f3ee"/>
-  <title>M3CH4 / Graybox Construction</title>
+  <title>M3CH4Ex / Constructor Test Yard</title>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
-  <link rel="stylesheet" href="./graybox.css?v=g16"/>
+  <link rel="stylesheet" href="./graybox.css?v=g17"/>
 </head>
 <body>
 <header class="topbar">
   <div><div class="eyebrow">M3CH4 / EXPERIMENTAL WORKSHOP</div>
-  <h1>GRAYBOX BUILDER <span>16 / PHYSICAL FIT + LIVE TEST</span></h1></div>
-  <a href="./index.html">Detailed lab ↗</a>
+  <h1>CONSTRUCTOR YARD <span>17 / BUILD · PILOT · INSPECT</span></h1></div>
+  <a href="./detailed-lab.html">Detailed assembly lab ↗</a>
 </header>
 <main>
   <section class="viewer" aria-label="Graybox 3D mech preview">
     <div class="viewport-head">
-      <span>STRUCTURE · MOUNTS · SILHOUETTE</span>
+      <span>GARAGE BAY · WORKSHOP + FIRING RANGE</span>
       <button id="socket-toggle" type="button" aria-pressed="false">SHOW SOCKETS</button>
     </div>
-    <div id="gb-viewport" aria-label="Orbit view, drag to rotate and pinch to zoom"></div>
+    <div id="gb-viewport" aria-label="Yard workshop: drag to orbit; when piloting, drag to aim"></div>
+    <div id="yard-hud" hidden>
+      <div class="yard-topline">
+        <button id="yard-garage" type="button">◀ GARAGE / BUILD</button>
+        <span id="yard-speed">0 KM/H</span>
+        <span id="yard-hits">0 HITS · 0/3 TARGETS</span>
+      </div>
+      <div class="yard-tools">
+        <button id="yard-reset" type="button">RESET RIG</button>
+        <button id="yard-targets" type="button">RESET TARGETS</button>
+        <button id="yard-camera" type="button">VIEW: CHASE</button>
+      </div>
+      <div id="yard-readout" role="status">WASD · DRAG TO AIM · SPACE/FIRE</div>
+      <div id="yard-move-pad" aria-label="Movement joystick">
+        <div id="yard-thumb"></div><span>MOVE</span>
+      </div>
+      <button id="yard-fire" type="button" aria-label="Fire installed weapon">FIRE</button>
+      <span class="yard-aim-hint">DRAG SCENE TO AIM</span>
+    </div>
     <div class="view-controls">
       <button id="gb-quarter">3/4</button><button id="gb-front">FRONT</button>
       <button id="gb-side">SIDE</button><button id="gb-top">TOP</button>
@@ -40,7 +58,7 @@
       <button class="tab" data-tab="audit">PART AUDIT</button>
     </div>
     <section id="parts-panel" class="panel">
-      <p class="helper">Choose a complete assembly, then tap a compatible socket or one of its attachment locations. Technical internals remain in the detailed lab.</p>
+      <p class="helper">Build your exact rig in this garage. Choose an assembly and its real mount, then drive the very same machine into the adjacent test range. Part Audit remains here.</p>
       <div id="stations"></div>
       <div id="choices"></div>
     </section>
@@ -60,16 +78,16 @@
     <footer class="bottom">
       <p id="status" role="status" aria-live="polite">Ready for construction.</p>
       <div class="actions">
-        <button id="deploy" class="deploy-action" type="button">PILOT IN TEST YARD ↗</button>
+        <button id="deploy" class="deploy-action" type="button">DEPLOY THIS EXACT MECH</button>
         <button id="reset">RESET</button>
         <button id="export">EXPORT JSON</button>
         <button id="import">IMPORT</button>
         <input id="file" type="file" accept=".json,application/json" hidden/>
       </div>
-      <p class="disclaimer">Stage 16 · Build here and test the closest supported five-station loadout in the live range. Prototype geometry, mounts, armor and supports remain in this constructor; the deployment dialog identifies any substitutions.</p>
+      <p class="disclaimer">Stage 17 · Single workshop and range. The complete experimental rig stays in the scene when you deploy. Movement and target hits are a sandbox prototype; full per-part dynamic physics and cockpit systems remain under development.</p>
     </footer>
   </aside>
 </main>
-<script type="module" src="./graybox.js?v=g16"></script>
+<script type="module" src="./graybox.js?v=g17"></script>
 </body>
 </html>
