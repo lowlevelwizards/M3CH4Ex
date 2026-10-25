@@ -1,0 +1,27 @@
+name: Construction lab checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.js'
+      - '*.mjs'
+      - '*.html'
+      - '*.css'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/lab-checks.yml'
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify JavaScript syntax
+        shell: bash
+        run: |
+          while IFS= read -r file; do node --check "$file"; done < <(find . -name '*.js' -o -name '*.mjs' | sort)
+      - name: Run construction tests
+        run: npm test
