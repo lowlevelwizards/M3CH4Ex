@@ -8,7 +8,7 @@ import {
 test('default lab rig is an authentic, graph-valid five-station machine',()=>{
   const rig=createLabMachine();
   assert.equal(labInspection(rig).valid,true);
-  assert.equal(labNodeList(rig).filter(n=>!n.virtual).length,5);
+  assert.equal(labNodeList(rig).filter(n=>!n.virtual).length,7); // five primary stations plus two owned legs
 });
 test('catalogue swaps use actual definitions and maintain graph consistency',()=>{
   const rig=createLabMachine();
