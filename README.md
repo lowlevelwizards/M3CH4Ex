@@ -29,7 +29,11 @@ The root `index.html` is the white construction studio; it is not the combat gam
 - **Stage 08D**: validated v5 JSON blueprints include foot targets, derived joint poses and manual mode
 - **Stage 08E**: component-authored shin spans and knee/ankle receivers; 160 mm longer Pylon L1 shin with distinct load-bearing geometry
 - **Stage 08E**: the unchanged graph and live IK automatically use each installed shin’s actual length; mixed configurations adapt grounded stance and shorter achievable poses without clipping joints
-- **Stage 08E**: construction viability reports connections, grounded stance, full crouch availability, step envelope, component dimensions, and *unverified* collision clearance; validated v6 blueprints preserve these builds
+- **Stage 08E**: construction viability reports connections, grounded stance, full crouch availability, step envelope, component dimensions, and *unverified* collision clearance
+- **Stage 09**: generic typed subassembly replacement proposal checks upstream interface, mount standard, side, load rating and every retained downstream connection before committing; original components are parked with their serials intact
+- **Stage 09**: Forge T2 compact upper leg (75 mm shorter, 125 kg) and Dockpad F2 wide stabilizer foot (40 mm deeper contact sole, 69 kg), alongside all three shin options
+- **Stage 09**: joint coordinates and planted-foot height are measured from the installed thigh, shin and foot, including a shared chassis-height baseline for uneven leg lengths
+- **Stage 09**: validated v7 blueprints preserve original serials, interchange configurations, grounded targets and stored owned parts
 - Isolate / explode previews, JSON blueprint export and import
 - Assembly and blueprint unit tests
 
@@ -50,7 +54,7 @@ Use a local HTTP server to preview ES modules, or GitHub Pages. There is no bund
 1. Open the lab and choose **MOBILITY**. The Stage 07 workbench exposes both legs and the one-click **Rook S2** shin swap.
 2. Open **ASSEMBLY** and tap a named shin node (or tap its mesh in the 3D scene). In **INSPECT**, replace the shin or detach it **with supported assemblies**.
 3. The detached original shin (and, where appropriate, its ankle and foot) remains in **OWNED / PARKED ASSEMBLIES**. Reinstall it later using its original serial.
-4. Use **EXPORT JSON** and **IMPORT JSON** to verify asymmetrical configurations. Version 1–5 blueprints remain importable; new exports use version 6.
+4. Use **EXPORT JSON** and **IMPORT JSON** to verify asymmetrical configurations. Version 1–6 blueprints remain importable; new exports use version 7.
 
 **Scope:** Stage 07 is a static assembly/geometry proof, not a mechanical gait solver. The alternate shin uses the same authored knee and ankle locations, and its 20 kg mass reduction is represented in the lab's derived assembly mass.
 
@@ -86,3 +90,16 @@ The geometry tests confirm planted ankle Y/Z positions under crouch, one-foot st
 5. Install Pylon on the opposite side, or mix Pylon with Rook and Yardwalker. Export and import the v6 blueprint and check that each shin's geometry and the foot targets remain intact.
 
 **Design boundary:** Our first Pylon is longer, not wider and not a new locomotion topology. Only the current Yardwalker two-leg layout is solved. Manufacturer standards, actuator force, full collision volumes, dynamic balance, paint and additional limb arrangements will be separate causal stages; this pass is not Stage 09–12.
+
+## Stage 09 — Genuine multi-component leg building
+
+1. Open **MOBILITY**. Expand **LEFT LEG** or **RIGHT LEG** independently. Each exposes **THIGH** (stock / Forge T2), **SHIN** (stock / Rook S2 / Pylon L1) and **FOOT** (stock / Dockpad F2).
+2. Replace one thigh with the Forge T2. Its knee receiver is **75 mm nearer the hip**. The knee and everything downstream automatically move with the same attachment graph.
+3. Fit Pylon L1 (+160 mm) and Dockpad F2 (+40 mm sole depth) on that side. The Dockpad is a **69 kg lightweight spreadfoot**, deliberately within the existing 70 kg foot and 120 kg ankle socket ratings.
+4. Open **POSE** and examine both measured limb chains, the generated standing height, viable crouch distance, and any step reduction. Shorter limbs may force the whole chassis lower to reach the same planted floor.
+5. Open **ASSEMBLY** and **INSPECT** to swap any of those three physical parts. Attached descendants retain their own serials and their positions follow the new parent's sockets.
+6. Export a **v7 blueprint**, import it, and verify the mixed machine returns with its owned/parked components and pose intact. Older v1–v6 blueprints remain compatible.
+
+**Architecture:** `proposeComponentReplacement()` in `assemblyGraph.js` is the reusable graph primitive. It knows nothing about shin IDs or the preset pairs: both upstream and child-facing typed interfaces must match, and all socket capacities are validated. `replaceAnatomyComponent()` applies that proposal transactionally while preserving old parts in the owned tray.
+
+**Limits:** This is an interchangeability laboratory, not a universal drag-and-drop mechanism. The new pieces use Yardwalker-compatible medium interfaces. Arbitrary connectors, adapters, precise swept-volume collisions, dynamic balance, foot load forces, independent paint and service records are separate future stages. The live combat repository is unchanged.
