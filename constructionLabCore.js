@@ -92,6 +92,11 @@ export function labEquip(assembly,slot,definitionId){
   const snapshot=structuredClone(assembly);
   try {
     const previousLegs=captureLegInstallations(assembly);
+    const attachedArm=manipulatorBlueprint(assembly);
+    if(attachedArm.enabled){
+      const removed=removeManipulator(assembly);
+      if(!removed.ok)throw new Error(removed.reason);
+    }
     if(yardLegSupported(assembly))temporarilyStripLegs(assembly);
     if(prior==='offset') {
       const reset=setGeneratorMount(assembly,'standard');
@@ -110,6 +115,10 @@ export function labEquip(assembly,slot,definitionId){
       slot==='mobility'&&definitionId==='legs-yard'&&!yardLegSupported(snapshot)
         ? {left:true,right:true} : previousLegs);
     if(yardLegSupported(assembly))for(const side of LEG_SIDES)reconnectDevices(assembly,side);
+    if(attachedArm.enabled){
+      const restored=restoreManipulatorBlueprint(assembly,attachedArm);
+      if(!restored.ok)throw new Error(restored.reason);
+    }
     const final=labInspection(assembly);
     if(!final.valid)throw new Error(final.graphCheck.errors.join(' '));
     return {ok:true,assembly};
@@ -124,11 +133,20 @@ export function labSetGeneratorMount(assembly,position){
   const snapshot=structuredClone(assembly);
   try {
     const installed=captureLegInstallations(assembly);
+    const attachedArm=manipulatorBlueprint(assembly);
+    if(attachedArm.enabled){
+      const removed=removeManipulator(assembly);
+      if(!removed.ok)throw new Error(removed.reason);
+    }
     if(yardLegSupported(assembly))temporarilyStripLegs(assembly);
     const result=setGeneratorMount(assembly,position);
     if(!result.ok)throw new Error(result.reason);
     reinstateLegs(assembly,installed);
     if(yardLegSupported(assembly))for(const side of LEG_SIDES)reconnectDevices(assembly,side);
+    if(attachedArm.enabled){
+      const restored=restoreManipulatorBlueprint(assembly,attachedArm);
+      if(!restored.ok)throw new Error(restored.reason);
+    }
     return {ok:true,position};
   }catch(error){
     Object.keys(assembly).forEach(key=>delete assembly[key]);
