@@ -6,7 +6,8 @@ import {
   labNodeList, labSetGeneratorMount, labLegAction, labLegDetails,
   labSectionAction, labSectionDetails, labStowed,
   labJointAction,labPosePreset,labPose,
-  labAssistedPreset,labGuidedWalkFrame,labGrounding,labReturnManual
+  labAssistedPreset,labGuidedWalkFrame,labGrounding,labReturnManual,
+  labViability,labMotionEnvelope,labSolveGrounded
 } from '../constructionLabCore.js';
 
 test('default lab rig is an authentic, graph-valid five-station machine',()=>{
@@ -199,7 +200,7 @@ test('Stage 07 blueprint roundtrip preserves mixed shins and stowed supported br
   assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
   assert.equal(labSectionAction(rig,'right','shin','detach',{cascade:true}).ok,true);
   const bp=labBlueprint(rig);
-  assert.equal(bp.version,5);
+  assert.equal(bp.version,6);
   const saved=JSON.stringify(bp);
   const restored=loadLabBlueprint(bp);
   assert.equal(JSON.stringify(labBlueprint(restored)),saved);
@@ -261,7 +262,7 @@ test('Stage 08 blueprint persists six mechanical degrees of freedom with v3 comp
   assert.equal(labJointAction(machine,'right','hip',-20).ok,true);
   assert.equal(labSectionAction(machine,'left','shin','swap',{variant:'rook'}).ok,true);
   const bp=labBlueprint(machine);
-  assert.equal(bp.version,5);
+  assert.equal(bp.version,6);
   const restored=loadLabBlueprint(bp);
   assert.deepEqual(labPose(restored),labPose(machine));
   assert.deepEqual(labBlueprint(restored),bp);
@@ -336,7 +337,7 @@ test('08D v5 blueprint stores foot targets and rejects mismatched joint data',()
   const result=labAssistedPreset(rig,'step-left');
   assert.equal(result.ok,true,result.reason);
   const blueprint=labBlueprint(rig);
-  assert.equal(blueprint.version,5);
+  assert.equal(blueprint.version,6);
   const imported=loadLabBlueprint(blueprint);
   assert.deepEqual(labBlueprint(imported),blueprint);
   const corrupted=structuredClone(blueprint);
@@ -364,4 +365,74 @@ test('08D restoring manual mode returns to prior hinge pose and neutral body tra
   assert.equal(labAssistedPreset(rig,'step-right').ok,true);
   labReturnManual(rig);
   assert.deepEqual(labPose(rig),changed);
+});
+
+test('08E Pylon L1 owns a genuinely longer shin and retains ankle interface graph parentage',()=>{
+  const rig=createLabMachine(),starting=labInspection(rig).machineCheck.massKg;
+  const before=labSectionDetails(rig).find(x=>x.side==='left').sections;
+  const installed=labSectionAction(rig,'left','shin','swap',{variant:'extended'});
+  assert.equal(installed.ok,true,installed.reason);
+  const after=labSectionDetails(rig).find(x=>x.side==='left').sections;
+  assert.equal(after.shin.variant,'extended');
+  assert.equal(after.ankle.serial,before.ankle.serial);
+  assert.equal(after.foot.serial,before.foot.serial);
+  assert.equal(labInspection(rig).machineCheck.massKg,starting+25);
+  assert.equal(labInspection(rig).graph.nodes[after.ankle.serial].parentSerial,after.shin.serial);
+  assert.equal(labGrounding(rig).mode,'grounded');
+  const check=labViability(rig);
+  assert.equal(check.structure,true);
+  assert.equal(check.ground,true,check.standReason);
+  assert.equal(check.legs.left.variant,'extended');
+  assert.ok(check.legs.left.lowerLengthM>check.legs.right.lowerLengthM+.14);
+  assert.equal(check.legs.left.extraReachM,.16);
+  assert.equal(check.legs.right.extraReachM,0);
+});
+test('08E asymmetric Pylon crouch is adapted with an explicit attainable motion scale',()=>{
+  const rig=createLabMachine();
+  assert.equal(labSectionAction(rig,'right','shin','swap',{variant:'extended'}).ok,true);
+  const stance=labAssistedPreset(rig,'crouch');
+  assert.equal(stance.ok,true,stance.reason);
+  assert.ok(stance.achievedDropM>0,'crouch should lower body');
+  assert.ok(stance.achievedDropM<=.15,'must not exceed request');
+  assert.equal(stance.limited,true,'full stock crouch should be too deep for extended leg');
+  assert.ok(stance.movementScale<1);
+  const g=labGrounding(rig);
+  assert.equal(g.feet.left.planted,true);
+  assert.equal(g.feet.right.planted,true);
+  assert.equal(labInspection(rig).valid,true);
+});
+test('08E Pylon can exchange sides, revert to stock geometry, and roundtrip blueprint',()=>{
+  const rig=createLabMachine();
+  assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'extended'}).ok,true);
+  assert.equal(labSectionAction(rig,'right','shin','swap',{variant:'rook'}).ok,true);
+  const first=labBlueprint(rig);
+  assert.equal(first.version,6);
+  const copy=loadLabBlueprint(first);
+  assert.deepEqual(labBlueprint(copy),first);
+  assert.equal(labSectionDetails(copy)[0].sections.shin.variant,'extended');
+  assert.equal(labSectionDetails(copy)[1].sections.shin.variant,'rook');
+  assert.equal(labSectionAction(copy,'left','shin','swap',{variant:'original'}).ok,true);
+  assert.equal(labSectionDetails(copy)[0].sections.shin.variant,'original');
+});
+test('08E continuous grounded step envelope is derived from installed shin lengths',()=>{
+  const stock=createLabMachine(),extended=createLabMachine();
+  assert.equal(labSectionAction(extended,'left','shin','swap',{variant:'extended'}).ok,true);
+  const a=labMotionEnvelope(stock),b=labMotionEnvelope(extended);
+  assert.equal(a.ok,true,a.reason);
+  assert.equal(b.ok,true,b.reason);
+  assert.ok(b.stepDistanceM<a.stepDistanceM);
+  assert.ok(b.liftM<a.liftM);
+  for(let i=0;i<=40;i++){
+    const result=labGuidedWalkFrame(extended,i/40,b);
+    assert.equal(result.ok,true,'frame '+i+' '+result.reason);
+  }
+});
+test('08E impossible reference reach is rejected without silently clipping an assembly',()=>{
+  const rig=createLabMachine();
+  const before=JSON.stringify(labBlueprint(rig));
+  const target=labGrounding(rig);target.mode='grounded';target.bodyDropM=.22;
+  target.feet.left={z:-.55,y:.3,planted:false};
+  const result=labSolveGrounded(rig,target);
+  assert.equal(result.ok,false);
+  assert.equal(JSON.stringify(labBlueprint(rig)),before);
 });
