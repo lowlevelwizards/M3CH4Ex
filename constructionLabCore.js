@@ -144,6 +144,7 @@ export function labJointAction(assembly,side,joint,degrees){
     Object.assign(assembly,snapshot);
     return {ok:false,reason:verdict.errors.concat(verdict.warnings).join('; ')};
   }
+  assembly.labManualPose=structuredClone(assembly.labPose);
   return result;
 }
 export function labPosePreset(assembly,name){
@@ -157,6 +158,7 @@ export function labPosePreset(assembly,name){
     Object.assign(assembly,snapshot);
     return {ok:false,reason:report.errors.concat(report.warnings).join('; ')};
   }
+  assembly.labManualPose=structuredClone(assembly.labPose);
   return result;
 }
 export function labPose(assembly){return currentPose(assembly);}
