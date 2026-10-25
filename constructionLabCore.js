@@ -33,8 +33,13 @@ import {
 import {
   jointLimitsFor,jointWorkingRange,actuatorStrokeCheck
 } from './constructionArticulation.js';
+import {
+  manipulatorDescription,installManipulator,removeManipulator,
+  manipulatorJointAction,replaceManipulatorMechanism,manipulatorBlueprint,
+  restoreManipulatorBlueprint,manipulatorPosePresets
+} from './constructionManipulator.js';
 
-export const LAB_BLUEPRINT_VERSION=8;
+export const LAB_BLUEPRINT_VERSION=9;
 export const LAB_SLOTS=Object.freeze([...SLOTS]);
 export const LAB_PARTS=Object.freeze([...BY_ID.values()]);
 export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'});
@@ -53,17 +58,23 @@ export function labInspection(assembly){
   const graph=assemblyGraph(assembly);
   const graphCheck=validateGraph(graph,assembly,BY_ID);
   const mechanisms=mechanismValidation(assembly);
+  const manipulator=manipulatorDescription(assembly);
   const rawCheck=inspectAssembly(assembly);
   const legs=LEG_SIDES.filter(side=>installedLeg(assembly,side)).length;
   const mobility={legs,complete:anatomyReadiness(assembly)};
   const articulation=articulationReport(assembly);
   const machineCheck={...rawCheck,
-    massKg:rigAnatomyMass(assembly,rawCheck.massKg),
+    massKg:rigAnatomyMass(assembly,rawCheck.massKg)+
+      Object.values(graph.nodes).reduce((sum,node)=>{
+        const def=BY_ID.get(node.definitionId);
+        return sum+(['rigid-link','manipulator'].includes(def?.assemblyRole)?def.massKg:0);
+      },0),
     ready:rawCheck.ready&&mobility.complete&&articulation.valid&&
       (!yardLegSupported(assembly)||articulation.powered)};
-  return {graph,graphCheck,machineCheck,mobility,articulation,mechanisms,
-    valid:graphCheck.valid&&mechanisms.valid&&articulation.errors.length===0,
-    ready:machineCheck.ready};
+  return {graph,graphCheck,machineCheck,mobility,articulation,mechanisms,manipulator,
+    valid:graphCheck.valid&&mechanisms.valid&&manipulator.valid&&
+      articulation.errors.length===0,
+    ready:machineCheck.ready&&manipulator.valid};
 }
 
 /** Stage 02–05: slot swaps remain transactions through existing production rules.
@@ -73,6 +84,9 @@ export function labEquip(assembly,slot,definitionId){
   if(!LAB_SLOTS.includes(slot)) return {ok:false,reason:'Unknown station.'};
   const def=BY_ID.get(definitionId);
   if(!def || def.slot!==slot) return {ok:false,reason:'Part cannot occupy this station.'};
+  if(slot==='structure'&&assembly.labManipulator?.attached&&
+    assembly.installed.structure!==assembly.owned.find(p=>p.definitionId===definitionId)?.serial)
+    return {ok:false,reason:'Remove the attached manipulator before changing its chassis.'};
   const prior=generatorMount(assembly);
   // Snapshot must precede *all* mutations, including moving the outrigger.
   const snapshot=structuredClone(assembly);
@@ -232,6 +246,29 @@ export function labMechanismAction(assembly,side,type,action,variant='plain'){
     Object.assign(assembly,original);
     return {ok:false,reason:mechanical.articulation.errors
       .concat(mechanical.mechanisms.errors).join('; ')};
+  }
+  return result;
+}
+export function labManipulatorDetails(assembly){return manipulatorDescription(assembly);}
+export {manipulatorPosePresets};
+export function labManipulatorAction(assembly,action,options={}){
+  const snapshot=structuredClone(assembly);
+  let result;
+  if(action==='install')result=installManipulator(assembly,options);
+  else if(action==='remove')result=removeManipulator(assembly);
+  else if(action==='bearing'||action==='actuator')
+    result=replaceManipulatorMechanism(assembly,action,options.variant);
+  else if(action==='pose')result=manipulatorJointAction(assembly,options.angle);
+  else if(action==='preset')
+    result=manipulatorJointAction(assembly,manipulatorPosePresets[options.preset]);
+  else return {ok:false,reason:'Unknown manipulator operation'};
+  if(!result.ok)return result;
+  const check=labInspection(assembly);
+  if(!check.valid){
+    Object.keys(assembly).forEach(k=>delete assembly[k]);
+    Object.assign(assembly,snapshot);
+    return {ok:false,reason:check.manipulator.errors?.join('; ')||
+      check.graphCheck.errors.join('; ')};
   }
   return result;
 }
@@ -400,10 +437,11 @@ export function labBlueprint(assembly){
     pose:currentPose(assembly),
     grounding:labGrounding(assembly),
     manualPose:structuredClone(assembly.labManualPose||currentPose(assembly)),
-    mechanisms:mechanismsForBlueprint(assembly)};
+    mechanisms:mechanismsForBlueprint(assembly),
+    manipulator:manipulatorBlueprint(assembly)};
 }
 export function loadLabBlueprint(input){
-  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,5,6,7,LAB_BLUEPRINT_VERSION].includes(input.version)
+  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,5,6,7,8,LAB_BLUEPRINT_VERSION].includes(input.version)
     ||!input.stations||typeof input.stations!=='object'
     ||Object.keys(input.stations).some(k=>!LAB_SLOTS.includes(k)))
       throw new Error('Unsupported or invalid lab blueprint.');
@@ -461,9 +499,14 @@ export function loadLabBlueprint(input){
     }
     machine.labGrounding=structuredClone(input.grounding);
   }
+  if(input.version>=9){
+    const restored=restoreManipulatorBlueprint(machine,input.manipulator);
+    if(!restored.ok)throw new Error(restored.reason);
+  }
   const result=labInspection(machine);
   if(!result.valid)throw new Error(result.graphCheck.errors.concat(
-    result.articulation.errors,result.mechanisms.errors).join(' '));
+    result.articulation.errors,result.mechanisms.errors,
+    result.manipulator.errors||[]).join(' '));
   return machine;
 }
 export function labNodeList(assembly){
