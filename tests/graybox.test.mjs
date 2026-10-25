@@ -108,3 +108,20 @@ test('Graybox save files are independent, validated, and reject out-of-catalog m
  const version=structuredClone(serialized);version.version=9000;
  assert.throws(()=>loadGraybox(version));
 });
+
+test('Every node carries explicit position, orientation, normal and load rules',()=>{
+ for(const frame of FRAMES){
+  const slots=socketsForFrame(frame.id);
+  for(const slot of slots){
+   assert.equal(slot.pos.length,3);
+   assert.equal(slot.rotation.length,3);
+   assert.equal(slot.normal.length,3);
+   assert.ok(Number.isFinite(slot.capacity)&&slot.capacity>0);
+   assert.ok(slot.standard);
+  }
+  for(const slot of slots.filter(s=>s.role==='side'))
+   assert.equal(slot.normal[0],Math.sign(slot.pos[0]));
+  for(const slot of slots.filter(s=>s.role==='rear'))
+   assert.equal(slot.rotation[1],Math.PI);
+ }
+});
