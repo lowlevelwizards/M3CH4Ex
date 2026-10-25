@@ -172,3 +172,17 @@ The workshop provides tap-to-pick compatible socket markers, equally accessible 
 
 **Boundaries:** The experimental four-point crawler, SPAR frame, bubble cab and six support items are silhouette prototypes. Their physics, balancing, damage, operation and production save compatibility are *not* implemented. The original detailed Stage 11 lab and live M3CH4 combat game are preserved unchanged. Integrating any accepted prototype into the gameplay builder remains a separate verified stage.
 
+
+## Stage 13 — Reuse the machines we already built
+
+The **same independent graybox builder** now uses existing M3CH4 authored geometry wherever a native visual is available: Bruiser/Skeleton/Wedge structural frames; Vista/Cyclops/Hearth cabs; Yardwalker/Kestrel/Hauler mobility families; Stump/Training/Rivet/S-6/Rocket weapons; Forge generator. The original `partVisuals.js` builder and manufacturer paint roles remain the single model source; the graybox no longer hand-imitates them.
+
+Remaining visual prototypes are improved but explicitly **not new production gameplay parts**: Spar frame, Bubble cab, Crawler mobility, Dynamo/Draft generator rendering, and optional support accessories. The static graybox utility arm reuses the existing Stage 11 structural link visual builders; it does not imply new arm locomotion or combat controls.
+
+**Presentation:** Each major assembly has three coverage states (BARE / ARMOR / ENCASED). Bare suppresses authored detachable protective meshes where the factory visual has tags while retaining steel load paths; armored displays the existing part's original appearance; encased adds visually separate segment-mounted shells. Mass difference remains the Stage 12 simple coverage estimate, **not** new armor HP/hitboxes or live damage behavior.
+
+**Mounts:** geometry uses the actual visual bounding/contact surfaces rather than treating every station's center as a socket. Existing mobility mesh geometry is placed with the bottom of its real feet on the workshop floor, and the frame load bridge overlaps its crown. Cab roof/front seats, side/roof weapon carriers and aft equipment are placed against actual visible frame faces. Saved socket IDs and mandatory station rules remain identical; only the visual adapters changed.
+
+The ten reference recipes still share one catalogue and use the same socket validator. Model/geometry regression checks assert that native kit meshes are used, all referenced machines retain grounded feet and physically overlapping frame connections, and adding encasement changes actual protective geometry.
+
+**This remains a creative construction prototype:** before merging anything into the production M3CH4 game, evaluate the physical alignments and ten silhouettes from the actual iPhone UI. Complex collision, limb movement for the crawler, and new combat/support abilities are deliberately not claimed.
