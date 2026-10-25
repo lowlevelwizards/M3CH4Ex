@@ -331,22 +331,37 @@ function supportVisual(part,paint){
    break;
   }
   case 'sensor':
+   // The mast actually bridges the rear receiver into the optical pod.
    box(g,[0,.14,-.12],[.39,.36,.35],secondary);
+   box(g,[0,-.08,.04],[.21,.22,.19],main,'sensor vertical footing');
+   cylinder(g,[0,-.09,.14],[0,.04,-.09],.065,JOINT,'sensor swivel support');
    for(const x of [-.11,.11])sphere(g,[x,.15,-.33],.089,GLASS);
    break;
   case 'shield':
-   box(g,[0,-.13,-.16],[.68,.80,.12],main);box(g,[0,-.12,-.24],[.51,.53,.045],secondary);
+   box(g,[0,-.13,-.16],[.68,.80,.12],main,'shield sacrificial face');
+   box(g,[0,-.12,-.24],[.51,.53,.045],secondary,'shield stiffener plate');
+   // Rear impact load transfers through two steel braces to the terminal.
+   for(const sign of [-1,1]){
+    cylinder(g,[sign*.13,.055,.22],[sign*.23,.10,-.10],.072,
+     JOINT,'shield rear support strut '+sign);
+    sphere(g,[sign*.23,.10,-.10],.058,JOINT,'shield attached stud '+sign);
+   }
    break;
   case 'cooler':
-   box(g,[0,0,.10],[.63,.63,.42],secondary);
+   box(g,[0,0,.10],[.63,.63,.42],secondary,'exchanger structural frame');
+   for(const sign of [-1,1])
+    cylinder(g,[sign*.22,-.24,.30],[sign*.22,-.22,-.14],.058,
+      JOINT,'coolant exchanger mounting rail '+sign);
    for(const x of [-2,-1,0,1,2])box(g,[x*.094,.03,-.15],[.045,.54,.055],DARK);
    break;
   case 'ammo':
-   box(g,[0,0,.07],[.46,.64,.52],main);
+   box(g,[0,0,.07],[.46,.64,.52],main,'magazine serviceable container');
+   box(g,[0,.34,.06],[.48,.085,.55],secondary,'magazine access lid');
    for(const x of [-.11,.11])box(g,[x,.02,-.23],[.12,.46,.12],DARK);
    break;
   case 'light':
-   cylinder(g,[0,0,0],[0,.64,0],.037,DARK);
+   box(g,[0,-.03,.03],[.25,.13,.29],secondary,'mast bolted foot');
+   cylinder(g,[0,0,0],[0,.64,0],.037,DARK,'light mast upright');
    sphere(g,[0,.68,0],.13,localMat('#ebb05b',.05,.85));
    break;
  }
@@ -354,6 +369,8 @@ function supportVisual(part,paint){
  // Bolted mounting blocks make otherwise dissimilar support gear look seated
  // in the same attachment ecosystem.
  box(g,[0,.055,.23],[.33,.30,.16],secondary,'auxiliary mount flange');
+ const mate=new THREE.Group();mate.name='auxiliary-input-mate';
+ mate.position.set(0,.055,.30);g.add(mate);
  for(const sign of [-1,1]){
   sphere(g,[sign*.115,.055,.318],.040,JOINT,'retaining bolt '+sign);
  }
