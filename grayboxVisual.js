@@ -49,9 +49,22 @@ function frameVisual(frame,paint,armor){
   front.rotation.x=-.26;
   box(g,[0,-h*.34,.02],[w*.82,h*.12,d*.63],DARK);
  }else if(frame.shape==='tall'){
-  box(g,[0,0,0],[w*.70,h*.94,d*.72],metal);
-  box(g,[0,h*.22,-d*.12],[w,h*.29,d*.66],main);
-  box(g,[0,-h*.35,.2],[w*.83,h*.13,d*.77],DARK);
+  // SPAR: tall load tower with exposed side rails, crossmembers and trunnions.
+  // The proportions, mounting sockets and capacity are independent of its skin.
+  for(const side of [-1,1]){
+   cylinder(g,[side*w*.27,-h*.41,.22],[side*w*.31,h*.39,.16],
+    .063,metal,'Spar load rail '+side);
+   sphere(g,[side*w*.40,h*.26,-d*.21],.142,JOINT,'side trunnion '+side);
+   box(g,[side*w*.36,h*.27,-d*.18],[.22,.31,.32],main,'equipment head '+side);
+   box(g,[side*w*.26,-h*.26,.31],[.095,.27,.38],metal,'lower gusset '+side);
+  }
+  box(g,[0,-.035,0],[w*.46,h*.75,d*.50],metal,'structural spine');
+  box(g,[0,h*.26,-.19],[w*.81,.22,d*.53],main,'top load cradle');
+  box(g,[0,-h*.35,.14],[w*.73,.18,d*.64],DARK,'mobility bridge');
+  cylinder(g,[-w*.28,-h*.34,.18],[w*.28,-h*.34,.18],.11,JOINT,'main lateral pin');
+  for(const side of [-1,1])
+   cylinder(g,[side*.13,h*.33,-.24],[side*.13,h*.33,.27],
+    .060,DARK,'service channel '+side);
  }else{
   box(g,[0,0,.03],[w*.83,h*.82,d*.82],metal);
   box(g,[0,h*.24,-d*.13],[w,h*.30,d*.62],main);
@@ -83,11 +96,22 @@ function cabVisual(part,paint,armor){
   box(g,[0,-.08,-.5],[.91,.39,.10],main);
   for(const x of [-.55,.55])box(g,[x,-.01,0],[.13,.53,.76],main);
  }else{
-  box(g,[0,-.26,.07],[.92,.23,.88],metal);
-  const dome=new THREE.Mesh(new THREE.SphereGeometry(.54,14,10,
+  // Rounded cab: an actual operator tub and canopy ring, not a ball on a cube.
+  box(g,[0,-.28,.035],[1.03,.24,.94],metal,'welded pilot tub');
+  const lower=new THREE.Mesh(new THREE.CylinderGeometry(.55,.50,.13,16),
+    DARK);lower.position.set(0,-.17,-.08);g.add(lower);
+  const dome=new THREE.Mesh(new THREE.SphereGeometry(.54,16,12,
    0,Math.PI*2,0,Math.PI*.68),GLASS);
-  dome.position.set(0,-.05,-.12);g.add(dome);
-  cylinder(g,[-.40,-.14,0],[.40,-.14,0],.056,DARK);
+  dome.name='curved canopy';dome.position.set(0,-.06,-.12);g.add(dome);
+  for(const sign of [-1,1]){
+   cylinder(g,[sign*.44,-.20,-.36],[sign*.37,.16,-.43],
+    .035,metal,'front mullion '+sign);
+   sphere(g,[sign*.47,-.18,.10],.11,JOINT,'canopy side hinge '+sign);
+  }
+  cylinder(g,[-.43,-.18,-.30],[.43,-.18,-.30],.06,metal,'forward locking bar');
+  box(g,[0,-.36,-.43],[.78,.14,.13],main,'front crash rail');
+  box(g,[0,-.32,.46],[.69,.22,.13],main,'rear cockpit service panel');
+  box(g,[0,-.14,-.04],[.40,.28,.32],DARK,'pilot instrument binnacle');
  }
  if(armor>=1)box(g,[0,-.30,-.38],[.73,.13,.18],main);
  if(armor>=2){
@@ -120,13 +144,29 @@ function legPair(g,form,primary,secondary,armor){
 function mobilityVisual(part,paint,armor){
  const g=new THREE.Group(),primary=mat(paint.main),secondary=mat(paint.secondary);
  if(part.form!=='quad'){legPair(g,part.form,primary,secondary,armor);return g;}
- box(g,[0,-.18,0],[1.20,.34,1.30],secondary);
- for(const x of [-.68,.68])for(const z of [-.52,.52]){
-  const hip=[x,-.1,z],knee=[x*1.58,-.61,z*1.32],ankle=[x*1.63,-1.43,z*1.48];
-  sphere(g,hip,.14,JOINT);cylinder(g,hip,knee,.095,secondary);
-  sphere(g,knee,.13,JOINT);cylinder(g,knee,ankle,.10,secondary);
-  box(g,[ankle[0],-1.54,ankle[2]],[.37,.17,.48],DARK);
-  if(armor>0)box(g,[hip[0]*1.2,-.28,hip[2]*1.08],[.26,.34,.29],primary);
+ // Crawler: one square load deck and four equal independent outboard legs.
+ // Greybox only; do not claim this has a fourth live locomotion solver.
+ box(g,[0,-.17,0],[1.27,.24,1.42],secondary,'four-point load deck');
+ for(const x of [-.68,.68]){
+  cylinder(g,[x,-.12,-.57],[x,-.12,.57],.070,JOINT,'outboard longitudinal beam');
+ }
+ for(const x of [-.68,.68])for(const z of [-.54,.54]){
+  const sign=Math.sign(x),
+   hip=[x,-.09,z],
+   knee=[x+sign*.43,-.60,z+Math.sign(z)*.20],
+   ankle=[x+sign*.49,-1.44,z+Math.sign(z)*.28];
+  sphere(g,hip,.165,JOINT,'crawler hip race');
+  cylinder(g,hip,knee,.12,secondary,'crawler load upper');
+  sphere(g,knee,.16,JOINT,'crawler knee pivot');
+  cylinder(g,knee,ankle,.105,secondary,'crawler lower strut');
+  sphere(g,ankle,.10,JOINT,'crawler ankle');
+  box(g,[ankle[0],-1.53,ankle[2]-.04],[.39,.17,.52],DARK,'crawler pad');
+  if(armor>=1)
+   box(g,[hip[0]+sign*.13,-.32,hip[2]],[.27,.34,.32],
+    primary,'crawler upper cover');
+  if(armor>=2)
+   box(g,[knee[0],-1.09,knee[2]],[.26,.37,.33],
+    primary,'crawler shin sleeve');
  }
  return g;
 }
@@ -158,16 +198,27 @@ function powerVisual(part,paint){
  const g=new THREE.Group(),main=mat(paint.secondary),primary=mat(paint.main);
  const size=part.form==='heavy'?[1.05,.81,.82]:
   part.form==='light'?[.71,.85,.62]:[.84,.66,.75];
- box(g,[0,0,0],size,main);
- for(let x=-2;x<=2;x++){
-  box(g,[x*(size[0]/6),size[1]/2+.065,0],[.056,.14,size[2]*.84],DARK);
+ box(g,[0,0,0],size,main,'generator cast pressure case');
+ box(g,[0,-size[1]*.48,0],[size[0]*.92,.10,size[2]*.90],DARK,'generator skid');
+ for(const x of [-1,1]){
+  cylinder(g,[x*size[0]*.43,-size[1]*.42,-size[2]*.45],
+   [x*size[0]*.43,-size[1]*.42,size[2]*.43],.067,JOINT,'mounting skid rail');
+  box(g,[x*size[0]*.42,-.01,0],[.08,size[1]*.58,size[2]*.69],
+   primary,'removable service wall');
+ }
+ for(let x=-3;x<=3;x++){
+  box(g,[x*(size[0]/8),size[1]/2+.10,.06],[.039,.20,size[2]*.76],
+   DARK,'radiator blade');
  }
  if(part.form==='heavy'){
-  for(const x of [-.36,.36])cylinder(g,[x,.02,-.42],[x,.02,.43],.10,JOINT);
+  for(const x of [-.36,.36])
+   cylinder(g,[x,.02,-.42],[x,.02,.43],.10,JOINT,'heavy external manifold');
  }else if(part.form==='light'){
-  cylinder(g,[0,.36,0],[0,.77,0],.16,JOINT);
+  cylinder(g,[0,.36,0],[0,.76,0],.14,JOINT,'air intake stack');
+  cylinder(g,[0,.72,0],[0,.82,0],.19,DARK,'exhaust cap');
  }
- box(g,[0,0,-size[2]/2-.06],[size[0]*.5,size[1]*.4,.09],primary);
+ box(g,[0,-.02,-size[2]/2-.055],[size[0]*.55,size[1]*.47,.10],
+  primary,'forward service shield');
  return g;
 }
 function supportVisual(part,paint){
