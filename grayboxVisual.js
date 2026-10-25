@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import {BY_PART,socketsForBuild} from './grayboxCore.js';
 import {buildSharedVisual} from './grayboxSharedVisual.js';
+import {localSocket,socketHardware,makeMobilityAdapter} from './grayboxRigging.js';
 import {buildFrameExtensions,buildBodyHousing,buildWeaponCarrier,
  buildFeetAccessory,buildFrameRiser,buildIndependentLegPlating} from './grayboxFormVisual.js';
 import './constructionManipulator.js';
@@ -423,12 +424,12 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   },state.armor.mobility):null;
  let mobilityBounds=mobile?actualBounds(mobile):null;
  if(mobile&&state.form?.feet&&state.form.feet!=='stock'){
-  mobile.add(buildFeetAccessory(state.form.feet,mobilityBounds,paint));
+  mobile.add(buildFeetAccessory(state.form.feet,mobilityBounds,paint,mobilityPart.id));
   mobilityBounds=actualBounds(mobile);
  }
  if(mobile&&(state.limbPlating?.left||state.limbPlating?.right)){
   mobile.add(buildIndependentLegPlating(state.limbPlating,mobilityBounds,paint,
-    state.accentByAssembly));
+    state.accentByAssembly,mobilityPart.id));
   mobilityBounds=actualBounds(mobile);
  }
  // Foot underside == 0; the lowest load-bearing frame interface overlaps
@@ -442,21 +443,36 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
  objects.push({category:'frame',group:body,source:body.userData.grayboxVisualSource||'graybox'});
  const allSockets=socketsForBuild(state);
  const physical=new Map(allSockets.filter(socket=>!socket.parent).map(socket=>[
-  socket.id,physicalSocketPosition(socket,frameBounds)
+  socket.id,localSocket(frame,socket)
  ]));
+ // Only installed receivers are drawn. Unused hardpoints stay uncluttered;
+ // optional socket debug markers still reveal the complete interface graph.
+ const occupied=new Set([
+  ...Object.values(state.installed).filter(Boolean).map(x=>x.socket),
+  ...Object.keys(state.support)
+ ]);
+ for(const socket of allSockets.filter(s=>!s.parent&&occupied.has(s.id))){
+  socketHardware(body,socket,physical.get(socket.id),frame);
+ }
 
  // Nested mounts are resolved after their parent has been physically placed.
  const worldFromNested=(socket)=>{
   const node=objects.find(o=>o.category===socket.parent);
   if(!node)return null;
   root.updateMatrixWorld(true);
+  if(socket.parent==='combat'){
+   const marker=node.group.getObjectByName('weapon-shield-mate');
+   if(marker){
+    const w=marker.getWorldPosition(new THREE.Vector3());
+    return [w.x,w.y-frameY,w.z];
+   }
+   // Direct gun mounts use the rear structural receiver, never barrel tip.
+   const w=node.group.localToWorld(new THREE.Vector3(.18,.06,.24));
+   return [w.x,w.y-frameY,w.z];
+  }
   const b=new THREE.Box3().setFromObject(node.group,true),
-   c=b.getCenter(new THREE.Vector3());
-  if(socket.parent==='cab')return [c.x,b.max.y+.04-frameY,c.z+.02];
-  // Weapon shields connect near the receiver / structural carrier,
-  // not at the tip of the barrel.
-  const p=node.group.localToWorld(new THREE.Vector3(.12,-.20,-.12));
-  return [p.x,p.y-frameY,p.z];
+    c=b.getCenter(new THREE.Vector3());
+  return [c.x,b.max.y-frameY,c.z];
  };
  const attached=[
   ...Object.entries(state.installed).filter(([,mount])=>mount)
@@ -504,21 +520,30 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
    x=pt[0]-mid.x;y=frameY+pt[1]-bb.min.y+.025;z=pt[2]-bb.max.z+.06;
   }else if(mount.category==='power'&&socket.role==='rear'){
    x=pt[0]-mid.x;y=frameY+pt[1]-mid.y;z=pt[2]-bb.min.z-.06;
+  }else if(mount.category==='support'&&socket.parent==='combat'){
+   // Shield bracket is an explicit point on the actual carrier.
+   x=pt[0]-mid.x;y=frameY+pt[1]-mid.y;z=pt[2]-mid.z;
   }else if(mount.category==='support'&&socket.role==='rear'){
-   x=pt[0]-mid.x;y=frameY+pt[1]-mid.y;z=pt[2]-bb.min.z-.04;
+   // Auxiliary flange is centered at local (0,.055,+.23).
+   x=pt[0];y=frameY+pt[1]-.055;z=pt[2]-.23;
   }else if(mount.category==='support'&&socket.role==='roof'){
-   x=pt[0]-mid.x;y=frameY+pt[1]-bb.min.y+.025;z=pt[2]-mid.z;
+   x=pt[0]-mid.x;y=frameY+pt[1]-bb.min.y-.015;z=pt[2]-mid.z;
   }else if(mount.category==='support'&&socket.role==='side'){
-   const right=pt[0]>0;
-   x=pt[0]-(right?bb.min.x:bb.max.x)+(right?-.05:.05);
-   y=frameY+pt[1]-bb.max.y*.30;z=pt[2]-mid.z;
+   // Side flange faces the frame laterally; the arm hangs vertically.
+   const right=pt[0]>0,sign=right?1:-1;
+   x=pt[0]-sign*.23;y=frameY+pt[1]-.055;z=pt[2];
   }
   definePosition(group,x,y,z);
   // No implicit "every rear gun turns backwards": assemblies preserve -Z
   // forward, and authored socket orientation is applied only where relevant.
   group.rotation.set(...(socket.rotation||[0,0,0]));
+  if(mount.category==='support'&&!socket.parent&&socket.role==='side')
+   group.rotation.y=pt[0]>0?Math.PI/2:-Math.PI/2;
+  if(mount.category==='support'&&!socket.parent&&socket.role==='rear')
+   group.rotation.y=0;
   group.userData.installedSocket=socket.id;
   group.userData.rootMateWorld=[pt[0],pt[1]+frameY,pt[2]];
+  group.userData.visualMateType=socket.parent?'nested-assembly':'frame-structure';
   root.add(group);
   if(socket.parent){
    const parent=objects.find(x=>x.category===socket.parent);
