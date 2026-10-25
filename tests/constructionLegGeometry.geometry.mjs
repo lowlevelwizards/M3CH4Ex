@@ -15,6 +15,9 @@ import {extractYardwalkerLeg,extractYardwalkerAnatomy,buildRookSparShin,
   buildPylonExtendedShin,buildForgeCompactThigh,buildDockpadStabilizerFoot
 } from '../yardwalkerVisual.js';
 import {YARDWALKER_LAYOUT} from '../mobilityDefinitions.js';
+import {buildGrayboxScene,visualFor} from '../grayboxVisual.js';
+import {buildSharedVisual,LIVE_VISUAL_IDS} from '../grayboxSharedVisual.js';
+import {recipe,BY_PART,PAINTS,defaultBuild} from '../grayboxCore.js';
 
 function boundsOf(object) {
   object.updateMatrixWorld(true);
@@ -444,4 +447,58 @@ test('Stage 11 physical P-series actuator endpoints follow the moving arm and ho
  assert.ok(Math.abs(moved.lengthM-measured.lengthM)>.03);
  assert.ok(Math.abs(drive.upperCap.position.distanceTo(drive.lowerCap.position)-
    moved.lengthM)<1e-7);
+});
+
+
+test('Stage 13 uses existing authored game models instead of lookalike primitives',()=>{
+ for(const id of ['frame-sr','frame-utility','frame-wedge',
+   'cab-utility','cab-cyclops','cab-armored',
+   'legs-compact','legs-yard','legs-hauler',
+   'gun-cannon','gun-short','gun-rivet','gun-scatter','gun-rocket',
+   'power-forge']){
+  assert.equal(LIVE_VISUAL_IDS.has(id),true,id);
+  const p=BY_PART.get(id),category=p.form?(['frame-sr','frame-utility','frame-wedge'].includes(id)?'frame':
+    id.startsWith('cab-')?'cab':id.startsWith('legs-')?'mobility':
+    id.startsWith('power-')?'power':'combat'):'frame';
+  const model=buildSharedVisual(category,id,{
+    main:PAINTS.mustard,secondary:PAINTS.charcoal,accent:PAINTS.safety
+   },1);
+  assert.ok(model,id+' did not build');
+  assert.equal(model.userData.grayboxVisualSource,'live-game-authored');
+  const meshes=[];
+  model.traverse(n=>{if(n.isMesh)meshes.push(n);});
+  assert.ok(meshes.length>=8,id+' lacks original authored structure');
+  assert.ok(!model.userData.outline,id+' retained selection envelope');
+ }
+});
+test('Stage 13 bare, original armored and fully encased levels remain independently visible',()=>{
+ const paint={main:PAINTS.rust,secondary:PAINTS.slate,accent:PAINTS.mustard};
+ for(const [type,id] of [['frame','frame-sr'],['cab','cab-utility'],
+  ['mobility','legs-yard'],['combat','gun-short']]){
+  const models=[0,1,2].map(a=>visualFor(type,BY_PART.get(id),paint,a));
+  const metrics=models.map(m=>{
+   let visible=0;
+   m.traverse(node=>{if(node.isMesh&&node.visible)visible++;});
+   return visible;
+  });
+  assert.ok(metrics[2]>metrics[1],id+' encasement must add actual panels');
+  assert.ok(metrics[0]<=metrics[1],id+' bare cannot add armor');
+ }
+});
+test('Stage 13 real mobility rests on ground and overlaps frame lower load interface',()=>{
+ for(let i=0;i<10;i++){
+  const rig=recipe(i),built=buildGrayboxScene(rig);
+  const frame=built.objects.find(x=>x.category==='frame');
+  const mobility=built.objects.find(x=>x.category==='mobility');
+  assert.ok(frame&&mobility,'Reference '+i+' must draw all mandatory assemblies');
+  const fb=boundsOf(frame.group),mb=boundsOf(mobility.group);
+  assert.ok(Math.abs(mb.min.y)<.06,'Reference '+i+' foot floats '+mb.min.y);
+  const gap=fb.min.y-mb.max.y;
+  assert.ok(gap<.09&&gap>-.27,'Reference '+i+' hip/frame gap '+gap);
+  for(const category of ['cab','combat','power']){
+   const part=built.objects.find(x=>x.category===category);
+   assert.ok(part,'Reference '+i+' missing drawn '+category);
+   assert.ok(!boundsOf(part.group).isEmpty(),'Reference '+i+' invisible '+category);
+  }
+ }
 });
