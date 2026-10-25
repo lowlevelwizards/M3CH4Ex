@@ -15,7 +15,8 @@ import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,PRESET_NAMES,
   articulationReport,jointWorkingRange
 } from './constructionArticulation.js';
 import {applyArticulatedModels,createActiveActuator,createRotaryBearingVisual,
-  updateActiveActuator,coarseClearanceHints} from './constructionArticulationVisual.js';
+  updateActiveActuator,updateLinkedActuator,coarseClearanceHints} from './constructionArticulationVisual.js';
+import {buildUniversalLinkVisual,buildManipulatorBracketVisual} from './constructionManipulatorVisual.js';
 import {installedDevice,deviceBinding,DEVICE_OPTIONS} from './constructionMechanisms.js';
 import {
   createLabMachine, labInspection, labEquip, labSetGeneratorMount, labBlueprint,
@@ -23,7 +24,8 @@ import {
   labSectionAction, labSectionDetails, labStowed,
   labJointAction,labPosePreset,labPose,
   labGrounding,labAssistedPreset,labGuidedWalkFrame,labReturnManual,
-  labViability,labMotionEnvelope,labMechanismDetails,labMechanismAction,LAB_SLOTS
+  labViability,labMotionEnvelope,labMechanismDetails,labMechanismAction,
+  labManipulatorDetails,labManipulatorAction,manipulatorPosePresets,LAB_SLOTS
 } from './constructionLabCore.js';
 
 const $=id=>document.getElementById(id);
@@ -34,7 +36,8 @@ const slotLabels={structure:'FRAME',mobility:'MOBILITY',power:'POWER',command:'C
 let machine=createLabMachine(), selectedSlot='structure', selectedSerial=machine.installed.structure;
 let selectedSocket=null;
 let currentTab='catalog', isolate=false, rayTargets=[], sockets=[],partRoots=new Map(), nodeWorldPoses=new Map();
-let actuators=[],poseAnimation=null,animationToken=0,neutralGroupY=0;
+let actuators=[],armActuator=null,armAnimation=null,armToken=0,
+  poseAnimation=null,animationToken=0,neutralGroupY=0;
 let clearance={warnings:[],status:'Not yet checked'};
 const viewMap={quarter:[2.42,.22],front:[Math.PI,.08],side:[Math.PI/2,.10],top:[Math.PI,1.47]};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -154,6 +157,128 @@ function renderCatalog(){
     }
     catalog.prepend(workbench);
   }
+}
+function stopManipulatorDemo(){
+  ++armToken;
+  if(armAnimation)cancelAnimationFrame(armAnimation.request);
+  armAnimation=null;
+}
+function doManipulatorAction(action,options={}){
+  stopManipulatorDemo();
+  const result=labManipulatorAction(machine,action,options);
+  if(!result.ok){setMessage(result.reason,true);return;}
+  const arm=labManipulatorDetails(machine);
+  if(action==='install')selectedSerial=arm.bracketSerial;
+  else if(action==='bearing')selectedSerial=arm.bearingSerial;
+  else if(action==='actuator')selectedSerial=arm.actuatorSerial;
+  else if(action==='remove')selectedSerial=machine.installed.structure;
+  if(action!=='pose'&&action!=='preset')rebuild(false);
+  else {applyExplode();renderManipulatorPanel();}
+  setMessage('Manipulator '+action.toUpperCase()+' · '+
+    (arm.attached?'bearer '+arm.bearing?.name+' · '+arm.range.min+
+      '° to '+arm.range.max+'°':'detached to owned inventory'));
+}
+function startManipulatorDemo(){
+  if(armAnimation) {stopManipulatorDemo();renderManipulatorPanel();return;}
+  const initial=labManipulatorDetails(machine),token=++armToken;
+  if(!initial.attached||!initial.valid||!initial.range.ok){
+    setMessage('Manipulator has no valid rotary/linear motion.',true);return;
+  }
+  const first=initial.angle,started=performance.now();
+  armAnimation={request:0,initial:first};
+  const tick=now=>{
+    if(!armAnimation||token!==armToken)return;
+    const t=Math.min(1,(now-started)/3000),phase=(1-Math.cos(t*2*Math.PI))/2,
+      angle=initial.range.min+(initial.range.max-initial.range.min)*phase;
+    const result=labManipulatorAction(machine,'pose',{angle:Math.round(angle*100)/100});
+    if(!result.ok){stopManipulatorDemo();setMessage(result.reason,true);return;}
+    applyExplode();
+    const value=$('manip-angle-value');if(value)value.textContent=Math.round(angle)+'°';
+    const slider=$('manip-angle-slider');if(slider)slider.value=String(angle);
+    if(t<1)armAnimation.request=requestAnimationFrame(tick);
+    else{
+      stopManipulatorDemo();labManipulatorAction(machine,'pose',{angle:first});
+      applyExplode();renderManipulatorPanel();
+      setMessage('Independent universal manipulator motion completed');
+    }
+  };
+  renderManipulatorPanel();
+  armAnimation.request=requestAnimationFrame(tick);
+}
+function renderManipulatorPanel(){
+  const panel=$('manip-controls');
+  if(!panel)return;
+  panel.replaceChildren();
+  const arm=labManipulatorDetails(machine),
+    box=document.createElement('section');box.className='card';
+  const heading=document.createElement('h2');
+  heading.textContent='INDUSTRIAL MANIPULATOR / GENERIC HARDWARE';
+  box.append(heading);
+  if(!arm.attached){
+    const p=document.createElement('p');p.className='meta';
+    p.textContent='Build a five-part functional machine on the chassis: bracket, L-53 link, B-series rotary bearing, L-43 link and P-series hydraulic drive.';
+    box.append(p);
+    const add=button('ASSEMBLE TEST MANIPULATOR',()=>doManipulatorAction('install'));
+    add.style.width='100%';box.append(add);panel.append(box);return;
+  }
+  for(const [name,value] of [
+    ['Structural attachment','FRAME / UTILITY BRACKET'],
+    ['Rotary bearing',arm.bearing?.name||'MISSING'],
+    ['Linear drive',arm.actuator?.name||'MISSING'],
+    ['Mechanical working range',arm.range.ok?arm.range.min+'° TO '+arm.range.max+'°':'NOT REACHABLE'],
+    ['Motion limiting factor',arm.range.limiter||arm.range.reason],
+    ['Live cylinder length',Math.round((arm.linkage?.lengthM||0)*1000)+' MM'],
+    ['Second actuator endpoint',arm.linkage?.targetSerial||'NONE']
+  ]){
+    const line=document.createElement('div');line.className='metric';
+    const a=document.createElement('span'),b=document.createElement('strong');
+    a.textContent=name;b.textContent=value;line.append(a,b);box.append(line);
+  }
+  const row=document.createElement('div');row.className='pose-presets';
+  for(const key of ['neutral','reach','fold','stow']){
+    const buttonEl=button(key.toUpperCase(),()=>doManipulatorAction('preset',{preset:key}));
+    const allowed=manipulatorPosePresets[key];
+    buttonEl.disabled=allowed<arm.range.min||allowed>arm.range.max;
+    row.append(buttonEl);
+  }
+  box.append(row);
+  const div=document.createElement('div');div.className='joint-control';
+  const h=document.createElement('div');h.className='metric';
+  const name=document.createElement('strong');name.textContent='INDEPENDENT HINGE';
+  const val=document.createElement('strong');val.id='manip-angle-value';
+  val.textContent=Math.round(arm.angle)+'°';h.append(name,val);div.append(h);
+  const slider=document.createElement('input');slider.id='manip-angle-slider';
+  slider.type='range';slider.min=arm.range.min;slider.max=arm.range.max;
+  slider.step='1';slider.value=arm.angle;slider.disabled=!arm.range.ok;
+  slider.addEventListener('input',()=>{
+    stopManipulatorDemo();
+    const result=labManipulatorAction(machine,'pose',{angle:Number(slider.value)});
+    if(!result.ok){setMessage(result.reason,true);slider.value=labManipulatorDetails(machine).angle;return;}
+    val.textContent=slider.value+'°';applyExplode();
+  });
+  div.append(slider);box.append(div);
+  const animateButton=button(armAnimation?'STOP TEST CYCLE':'TEST ARTICULATED SWEEP',
+    ()=>startManipulatorDemo());
+  animateButton.style.width='100%';box.append(animateButton);
+  for(const [type,choices] of [
+    ['bearing',[['plain','B-40'],['wide','B-62']]],
+    ['actuator',[['utility','P-48'],['travel','P-70']]]
+  ]){
+    const wrap=document.createElement('div');wrap.className='leg-variants';
+    const label=document.createElement('strong');label.textContent=type.toUpperCase();
+    wrap.append(label);
+    for(const [variant,labelText] of choices){
+      const b=button((arm[type]?.variant===variant?'✓ ':'')+labelText,
+        ()=>doManipulatorAction(type,{variant}));
+      b.disabled=arm[type]?.variant===variant;wrap.append(b);
+    }
+    box.append(wrap);
+  }
+  const remove=button('REMOVE COMPLETE MANIPULATOR',()=>doManipulatorAction('remove'));
+  remove.style.width='100%';box.append(remove);
+  const details=document.createElement('p');details.className='meta';
+  details.textContent='Identical B/P catalogue IDs to the legs. Joint and links are positioned by their own graph sockets; the cylinder has one parent plus a verified moving endpoint.';
+  box.append(details);panel.append(box);
 }
 function own(serial){return machine.owned.find(p=>p.serial===serial);}
 function showTree(){
@@ -678,7 +803,7 @@ function startSweep(){
 function switchTab(which){
   currentTab=which;
   document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===which)));
-  for(const tab of ['catalog','tree','inspect','pose'])$(tab+'-panel').hidden=which!==tab;
+  for(const tab of ['catalog','tree','inspect','pose','manip'])$(tab+'-panel').hidden=which!==tab;
   refreshSelection();
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
@@ -726,7 +851,7 @@ function clearGeometry(parent){
 function buildModels(){
   clearGeometry(partGroup);clearGeometry(markerGroup);
   partGroup.position.set(0,0,0);neutralGroupY=0;
-  partRoots.clear();rayTargets=[];sockets=[];actuators=[];
+  partRoots.clear();rayTargets=[];sockets=[];actuators=[];armActuator=null;
   const inspection=labInspection(machine),graph=inspection.graph;
   const frame=own(graph.root),frameDef=BY_ID.get(frame?.definitionId);
   if(!frameDef){setMessage('Missing structural frame.',true);return;}
@@ -767,6 +892,10 @@ function buildModels(){
       }
     } else if(def?.assemblyRole==='mechanism'){
       model=def.device==='bearing'?createRotaryBearingVisual(def):new THREE.Group();
+    } else if(def?.assemblyRole==='rigid-link'){
+      model=buildUniversalLinkVisual(def);
+    } else if(def?.assemblyRole==='manipulator'){
+      model=buildManipulatorBracketVisual(def);
     } else if(def?.assemblyRole==='leg'){
       if(!yardwalkerLegVisuals?.[def.side])
         throw new Error('A leg cannot render without the owning Yardwalker carriage');
@@ -802,6 +931,15 @@ function buildModels(){
         if(obj.isMesh){obj.userData.labSerial=device.serial;rayTargets.push(obj);}
       });
     }
+  }
+  const arm=labManipulatorDetails(machine);
+  if(arm.attached&&arm.actuator&&arm.linkage){
+    armActuator=createActiveActuator('manipulator',arm.actuator);
+    armActuator.group.userData.labSerial=arm.actuatorSerial;
+    partGroup.add(armActuator.group);
+    armActuator.group.traverse(obj=>{
+      if(obj.isMesh){obj.userData.labSerial=arm.actuatorSerial;rayTargets.push(obj);}
+    });
   }
   let bounds=new THREE.Box3().setFromObject(partGroup);
   if(!bounds.isEmpty()){
@@ -854,6 +992,12 @@ function applyExplode(){
     actuator.group.visible=status.visible&&fraction<.01&&
       (!isolate||(focusDef?.assemblyRole==='anatomy'&&focusDef.side===actuator.side));
   }
+  if(armActuator){
+    const arm=labManipulatorDetails(machine);
+    const status=updateLinkedActuator(armActuator,arm.attached?arm.linkage:null,cache);
+    armActuator.group.visible=status.visible&&fraction<.01&&
+      (!isolate||selectedSerial===arm.actuatorSerial);
+  }
   partGroup.updateMatrixWorld(true);
   clearance=fraction===0?coarseClearanceHints(graph,partRoots):
     {warnings:[],status:'Hide exploded view to inspect coarse clearance'};
@@ -886,13 +1030,14 @@ function reframe(){
 function rebuild(fit=true){
   const bounds=buildModels();
   renderSlots();renderCatalog();showTree();renderInspection();renderPosePanel();
+  renderManipulatorPanel();
   const verdict=labInspection(machine);
   const nr=labNodeList(machine).length;
   const absent=LAB_SLOTS.filter(s=>!machine.installed[s]).length;
   const yard=verdict.mobility;
   stats.textContent=nr+' NODES · '+Math.round(verdict.machineCheck.massKg)+' KG'+
     (yard.legs?' · '+yard.legs+'/2 LEGS':'');
-  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 10 · MECHANISMS':'STAGE 10 · INCOMPLETE';
+  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 11 · UNIVERSAL ARM':'STAGE 11 · INCOMPLETE';
   if(!verdict.valid)setMessage(verdict.graphCheck.errors.join(' | '),true);
   else if(!verdict.ready)setMessage(verdict.mobility.complete?
     'Structurally valid · not combat-ready in live rules':
