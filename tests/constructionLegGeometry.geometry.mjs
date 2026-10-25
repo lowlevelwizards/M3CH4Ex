@@ -1,9 +1,12 @@
 import {createLabMachine,labJointAction,labSectionAction,labInspection,labSectionDetails,
   labAssistedPreset,labGrounding,labGuidedWalkFrame,labMotionEnvelope,
-  labMechanismAction,labMechanismDetails} from '../constructionLabCore.js';
+  labMechanismAction,labMechanismDetails,labManipulatorAction,labManipulatorDetails
+} from '../constructionLabCore.js';
 import {BY_ID,graphWorldPoses} from '../components.js';
 import {calculateArticulatedMatrices,createActiveActuator,updateActiveActuator,
-  createRotaryBearingVisual} from '../constructionArticulationVisual.js';
+  createRotaryBearingVisual,updateLinkedActuator} from '../constructionArticulationVisual.js';
+import {buildUniversalLinkVisual,buildManipulatorBracketVisual} from '../constructionManipulatorVisual.js';
+import {linkedStrokeLength,mechanismJointDescriptors} from '../constructionKinematics.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -377,4 +380,67 @@ test('Stage 10 two structural port parentages never duplicate a drive when it sp
    labSectionDetails(rig)[0].sections.shin.serial);
  assert.equal(graph.nodes[mechanical.actuator.serial].parentSocket,'drive-mount');
  assert.equal(Object.values(graph.nodes).filter(n=>n.serial===mechanical.actuator.serial).length,1);
+});
+
+test('Stage 11 articulated arm rotates the downstream structural link but not its upstream carrier',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ const arm=labManipulatorDetails(rig),before=activeGeometry(rig);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:12}).ok,true);
+ const after=activeGeometry(rig);
+ const origin=(cache,serial)=>new THREE.Vector3().setFromMatrixPosition(cache.get(serial).matrix);
+ assert.ok(origin(before.matrix,arm.upperSerial).distanceTo(origin(after.matrix,arm.upperSerial))<1e-7);
+ assert.ok(origin(before.matrix,arm.bearingSerial).distanceTo(origin(after.matrix,arm.bearingSerial))<1e-7);
+ const rest=before.matrix.get(arm.lowerSerial).matrix,
+   posed=after.matrix.get(arm.lowerSerial).matrix;
+ const tail=new THREE.Vector3(0,-.42,-.10);
+ const tipBefore=tail.clone().applyMatrix4(rest),tipAfter=tail.clone().applyMatrix4(posed);
+ assert.ok(tipBefore.distanceTo(tipAfter)>.07,'distal arm tool must move');
+ assert.ok(origin(before.matrix,arm.lowerSerial).distanceTo(origin(after.matrix,arm.lowerSerial))<1e-7,
+   'bearing must not create a disconnected gap at the hinge');
+ const knee=labSectionDetails(rig)[0].sections;
+ assert.ok(origin(before.matrix,knee.foot.serial).distanceTo(origin(after.matrix,knee.foot.serial))<1e-7,
+   'independent arm rotation must never perturb planted legs');
+});
+test('Stage 11 generalized joint registry includes same mechanical axis for knees and non-leg arm',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ const arm=labManipulatorDetails(rig),joints=mechanismJointDescriptors(rig);
+ assert.ok(joints.some(x=>x.serial===arm.bearingSerial&&x.axis==='x'&&x.key===arm.bearingSerial));
+ const knee=labSectionDetails(rig)[0].sections.knee.serial;
+ assert.ok(joints.some(x=>x.serial===knee&&x.key==='left:knee'));
+ assert.ok(joints.every(x=>x.axis==='x'));
+});
+test('Stage 11 tool arm graphics use real joint locations and identifiable mechanical links',()=>{
+ const bracket=BY_ID.get('construction-manip-bracket'),
+   upper=BY_ID.get('construction-link-530'),
+   lower=BY_ID.get('construction-link-430');
+ const a=buildManipulatorBracketVisual(bracket),
+   b=buildUniversalLinkVisual(upper),c=buildUniversalLinkVisual(lower);
+ assert.ok(a.children.length>=4&&b.children.length>=7&&c.children.length>=7);
+ assert.ok(b.getObjectByName('upper clevis pin'));
+ assert.ok(c.getObjectByName('lower clevis pin'));
+ assert.ok(new THREE.Box3().setFromObject(b).min.y<-.40);
+ assert.ok(new THREE.Box3().setFromObject(c).min.y<-.35);
+});
+test('Stage 11 physical P-series actuator endpoints follow the moving arm and honor actual stroke',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ assert.equal(labManipulatorAction(rig,'bearing',{variant:'wide'}).ok,true);
+ assert.equal(labManipulatorAction(rig,'actuator',{variant:'travel'}).ok,true);
+ const arm=labManipulatorDetails(rig);
+ const drive=createActiveActuator('manipulator',arm.actuator);
+ const before=activeGeometry(rig);
+ const measured=updateLinkedActuator(drive,arm.linkage,before.matrix);
+ assert.equal(measured.valid,true);
+ assert.ok(Math.abs(measured.lengthM-arm.linkage.lengthM)<.00001);
+ assert.ok(Math.abs(drive.housing.scale.y-arm.actuator.stroke.housing)<1e-6);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:95}).ok,true);
+ const after=labManipulatorDetails(rig),transformed=activeGeometry(rig);
+ const moved=updateLinkedActuator(drive,after.linkage,transformed.matrix);
+ assert.equal(moved.valid,true);
+ assert.ok(Math.abs(moved.lengthM-after.linkage.lengthM)<.00001);
+ assert.ok(Math.abs(moved.lengthM-measured.lengthM)>.03);
+ assert.ok(Math.abs(drive.upperCap.position.distanceTo(drive.lowerCap.position)-
+   moved.lengthM)<1e-7);
 });
