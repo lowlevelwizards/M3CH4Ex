@@ -15,8 +15,10 @@ const server=createServer(async(req,res)=>{
   const full=resolve(ROOT,'.'+(pathname==='/'?'/index.html':pathname));
   if(!full.startsWith(ROOT+sep))throw Error('Outside test root');
   let data=await readFile(full);
-  if(pathname==='/'||pathname==='/index.html')
-   data=Buffer.from(data.toString().replace(
+  // Every HTML entrypoint uses the same pinned local Three.js in browser
+  // smoke, including the new default yard and retained detailed mechanism lab.
+  if(extname(full)==='.html')
+   data=Buffer.from(data.toString().replaceAll(
     'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js',
     '/node_modules/three/build/three.module.js'));
   res.writeHead(200,{'Content-Type':mime[extname(full)]||'application/octet-stream'});
