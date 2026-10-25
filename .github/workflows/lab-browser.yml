@@ -1,0 +1,28 @@
+name: Construction browser smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.js'
+      - '*.html'
+      - '*.css'
+      - 'tests/browserSmoke.mjs'
+      - '.github/workflows/lab-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned model runtime and browser
+        run: npm install --no-save --no-package-lock --ignore-scripts three@0.186.0 playwright@1.56.1
+      - name: Install headless Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Validate real startup and manipulator controls
+        run: node tests/browserSmoke.mjs
