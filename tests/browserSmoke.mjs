@@ -85,6 +85,26 @@ try{
  if(await socketChoice.count())await socketChoice.first().click();
  await page.waitForTimeout(120);
  assert.deepEqual(errors,[],'Socket-selection browser errors');
+ await page.locator('[data-tab="looks"]').click();
+ const arch=page.locator('#appearance select[data-form]');
+ assert.equal(await arch.count(),4,'Expected four interchangeable architectural families');
+ await arch.nth(0).selectOption('drum');
+ await arch.nth(1).selectOption('heavy');
+ await arch.nth(2).selectOption('low');
+ await arch.nth(3).selectOption('claw');
+ await page.waitForTimeout(250);
+ assert.deepEqual(errors,[],'Stage 14 form selection browser errors');
+ const selected=await page.locator('#appearance select[data-form]').evaluateAll(
+  nodes=>nodes.map(node=>[node.dataset.form,node.value]));
+ assert.deepEqual(selected,[['housing','drum'],['carrier','heavy'],
+  ['stance','low'],['feet','claw']]);
+ await page.locator('[data-tab="reference"]').click();
+ await page.getByRole('button',{name:/03 \/ CANOPY ASSAULT/}).click();
+ await page.waitForTimeout(180);
+ assert.deepEqual(errors,[],'New Bubble/Cradle recipe browser errors');
+ await page.locator('[data-tab="looks"]').click();
+ assert.equal(await page.locator('select[data-form="stance"]').inputValue(),'low');
+ console.log('STAGE14_FORMS',JSON.stringify(selected));
  console.log('GRAYBOX_BROWSER_SMOKE_OK');
  console.log('BROWSER_SMOKE_OK');
 }finally{
