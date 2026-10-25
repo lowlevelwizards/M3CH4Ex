@@ -40,6 +40,12 @@ The root `index.html` is the white construction studio; it is not the combat gam
 - **Stage 10**: removing a drive leaves a valid but unpowered mechanism; reinserting the owned drive restores assisted movement
 - **Stage 10**: structural links are defined as reusable rigid-link interfaces; thigh and shin are the present INSTALLATION ROLES rather than universal-purpose restrictions
 - **Stage 10**: validated v8 blueprints preserve mechanism assignments, detached owned parts, serials, coupled endpoints and mechanical poses
+- **Stage 11**: data-driven graph pivot evaluation drives both Yardwalker hinges and independently mounted manipulator bearings
+- **Stage 11**: independent chassis manipulator (utility bracket → reusable L-53 link → B-series rotary bearing → L-43 link) with a two-ended P-series drive
+- **Stage 11**: arm hinges/cylinders reuse exact B-40/B-62/P-48/P-70 catalogue IDs and their serial-owned hardware inventory—no elbow-specific clones
+- **Stage 11**: non-anatomical rigid-link definitions declare sizes, socket standards, mass, attachment locations and compatible applications
+- **Stage 11**: arm presets, manual sweep, live measured actuator length, and bearing/stroke limits
+- **Stage 11**: version 9 blueprints preserve arm topology, drive/bearing identities and independent angle while v1–v8 remain importable
 - Isolate / explode previews, JSON blueprint export and import
 - Assembly and blueprint unit tests
 
@@ -129,3 +135,23 @@ The geometry tests confirm planted ankle Y/Z positions under crouch, one-foot st
 **Engineering architecture:** generic hardware definitions are in `constructionMechanisms.js` and remain location-independent. `constructionArticulation.js` derives limits and stroke from active device serials. `constructionGroundedPose.js` and its lab adapter reject unattainable or unpowered foot targets, without silently clipping. `assemblyGraph.js` validates role/standard compatibility on physical mounting ports.
 
 **Compatibility:** v1–v7 blueprints still import. v8 adds the mechanism ownership/binding fields. Source changes are confined to M3CH4Ex; the live M3CH4 game is unaffected.
+
+## Stage 11 — First non-leg articulated machine
+
+**Demonstration:** open **MANIPULATOR** in the construction lab, then tap **ASSEMBLE TEST MANIPULATOR**. The real structural attachment chain is:
+
+`frame utility-manipulator socket → construction-manip-bracket → L-53 rigid link → B-40 rotary bearing → L-43 rigid link`
+
+A P-48 linear drive is independently mounted to the L-53's `drive-mount` and references the L-43's moving `driveAnchors.utility` clevis. The drive never claims a second structural parent. Its geometry follows the two posed graph nodes.
+
+Switch the hinge between B-40 and B-62 and its actuator between P-48 and P-70. The mechanical range is computed from the installed bearing's rotary stops **AND** the actuator's end-to-end stroke. Use **TEST ARTICULATED SWEEP**, the manual hinge slider, or the Reach/Fold/Stow presets (unreachable poses are disabled). The knee hardware remains independently configured, sharing the **same catalogue definitions**.
+
+The **L-53** and **L-43** are specified as multipurpose links with medium structural interfaces, mass, rigid dimensions, bearings/clevis receivers, and lists of possible uses. They are currently assembled as an industrial arm, not hardcoded as biceps or shins. Conversely, an anatomically specialized assembly may still intentionally declare application restrictions.
+
+To remove the machine, tap **REMOVE COMPLETE MANIPULATOR**: the entire five-component structural branch becomes detached but remains in the serial-owned inventory, while both legs retain their previous joint hardware.
+
+**Generalized architecture:** `constructionKinematics.js` resolves serial-addressed X-axis joint channels, and `constructionArticulationVisual.js` applies those same parent/descendant transforms to the manipulator and leg branches. `constructionManipulator.js` supplies the demonstration catalogue links, structural graph attachments, independent hardware operations and explicit secondary hydraulic connection. `constructionManipulatorVisual.js` creates physically connected industrial member visuals. The manipulator has its own joint command and never requires a new bespoke gait animation.
+
+**Test boundary:** This is a constrained five-component installation at an authored utility mount, not an arbitrary universal socket-layout editor. Current graphical articulation demonstrates one-axis rotary pivots and two-ended linear actuators; ball joints, prismatic joints, triaxial IK, dynamic loads, and exact swept-volume collision are not implemented. Frame swaps require detaching a dependent manipulator first; unrelated station changes park and restore its exact serials. Live M3CH4 is not modified.
+
+**Compatibility:** new exports use **v9**. Existing v1–v8 lab blueprints continue importing without a manipulator.
