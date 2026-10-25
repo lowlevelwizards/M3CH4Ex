@@ -502,3 +502,77 @@ test('Stage 13 real mobility rests on ground and overlaps frame lower load inter
   }
  }
 });
+
+test('Stage 14 four bare frames are mechanically distinct naked load skeletons',()=>{
+ const frameIds=['frame-sr','frame-utility','frame-wedge','frame-spire-gb'];
+ const bounds=frameIds.map(id=>{
+  const rig=defaultBuild();rig.frame=id;rig.armor.frame=0;
+  const scene=buildGrayboxScene(rig);
+  const frame=scene.objects.find(o=>o.category==='frame').group;
+  const box=boundsOf(frame),size=box.getSize(new THREE.Vector3());
+  const labels=[];frame.traverse(o=>{if(o.name)labels.push(o.name);});
+  assert.ok(labels.length>=5,id+' has no authored mechanical structure');
+  return {id,size,labels};
+ });
+ assert.ok(bounds.find(b=>b.id==='frame-wedge').labels.some(x=>/cradle/i.test(x)));
+ assert.ok(bounds.find(b=>b.id==='frame-sr').labels.some(x=>/shoulder/i.test(x)));
+ assert.ok(bounds.find(b=>b.id==='frame-utility').labels.some(x=>/upright/i.test(x)));
+ assert.ok(bounds.find(b=>b.id==='frame-spire-gb').labels.some(x=>/spar/i.test(x)));
+ assert.ok(bounds.find(b=>b.id==='frame-sr').size.x>
+   bounds.find(b=>b.id==='frame-spire-gb').size.x);
+});
+test('Stage 14 body housings change silhouette without replacing structural frame',()=>{
+ const rig=defaultBuild();
+ rig.armor.frame=0;
+ const base=buildGrayboxScene(rig),original=base.objects.find(o=>o.category==='frame').group;
+ const before=boundsOf(original).getSize(new THREE.Vector3());
+ rig.form.housing='drum';
+ const cylindrical=buildGrayboxScene(rig);
+ const drum=cylindrical.objects.find(o=>o.category==='frame').group;
+ const named=[];
+ drum.traverse(x=>{if(x.name)named.push(x.name);});
+ assert.ok(named.includes('cylindrical protective drum'));
+ assert.ok(named.includes('circular access hatch'));
+ assert.equal(cylindrical.objects.find(o=>o.category==='cab').group.userData.installedSocket,'cab-top');
+ assert.ok(boundsOf(drum).getSize(new THREE.Vector3()).x>=before.x*.8);
+ rig.form.housing='rounded';
+ const rounded=buildGrayboxScene(rig).objects.find(o=>o.category==='frame').group;
+ let pods=0;rounded.traverse(x=>{if(x.name.startsWith('round machine pod'))pods++});
+ assert.equal(pods,2);
+});
+test('Stage 14 combat station attaches a genuinely structural heavy carrier with existing weapon at its terminal',()=>{
+ const rig=defaultBuild();rig.form.carrier='heavy';
+ const constructed=buildGrayboxScene(rig),weapon=constructed.objects.find(x=>x.category==='combat');
+ assert.equal(weapon.source,'stage14-articulated-weapon-carrier');
+ const names=[];weapon.group.traverse(o=>{if(o.name)names.push(o.name);});
+ for(const label of ['carrier shoulder rotary joint','carrier primary structural link',
+  'carrier elbow rotary joint','carrier distal arm','terminal receiver',
+  'load-bearing diagonal actuator'])assert.ok(names.includes(label),label);
+ assert.ok(weapon.group.userData.rootMateWorld);
+ const pivot=new THREE.Vector3(...weapon.group.userData.rootMateWorld);
+ assert.ok(weapon.group.position.distanceTo(pivot)<1e-6,'carrier root must mate directly to frame socket');
+ assert.ok(names.length>12,'real gun mesh should be retained at terminal receiver');
+});
+test('Stage 14 low biped stands on ground and stance adjustment preserves root contact',()=>{
+ const rig=recipe(2);
+ assert.equal(rig.installed.mobility.id,'mobility-low-gb');
+ const built=buildGrayboxScene(rig),mob=built.objects.find(o=>o.category==='mobility');
+ assert.ok(Math.abs(boundsOf(mob.group).min.y)<.06);
+ const legNames=[];mob.group.traverse(o=>{if(o.name)legNames.push(o.name);});
+ assert.equal(legNames.filter(x=>x==='compact hip pivot').length,2);
+ assert.equal(legNames.filter(x=>x==='broad planted boot').length,2);
+ assert.equal(legNames.filter(x=>x.startsWith('split replaceable toe')).length,4);
+ const frame=built.objects.find(o=>o.category==='frame');
+ assert.ok(boundsOf(frame.group).min.y<boundsOf(mob.group).max.y+.09);
+});
+test('Stage 14 all ten recipes remain fully assembled from shared visual families',()=>{
+ for(let i=0;i<10;i++){
+  const state=recipe(i),built=buildGrayboxScene(state);
+  assert.ok(built.objects.some(x=>x.category==='combat'));
+  assert.ok(built.objects.some(x=>x.category==='power'));
+  assert.ok(built.objects.some(x=>x.category==='cab'));
+  assert.ok(built.objects.some(x=>x.category==='mobility'));
+  const frame=built.objects.find(x=>x.category==='frame').group;
+  assert.ok(!boundsOf(frame).isEmpty());
+ }
+});
