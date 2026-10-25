@@ -5,6 +5,8 @@ import {
  emptyBuild,defaultBuild,install,addSupport,removeSupport,changeFrame,inspect,
  validSockets,loadGraybox,exportGraybox,recipe,RECIPES,PAINTS,socketsForFrame
 } from '../grayboxCore.js';
+import {setForm} from '../grayboxCore.js';
+import {HOUSINGS,CARRIERS,STANCES,FEET,normalizeForm,matingTransform} from '../grayboxArchitecture.js';
 
 test('Five stations are mandatory, and none of them is collapsed into optional supports',()=>{
  const state=emptyBuild();
@@ -18,12 +20,12 @@ test('Five stations are mandatory, and none of them is collapsed into optional s
 });
 test('Starter catalogue is intentionally small but spans every fundamentally distinct assembly family',()=>{
  assert.equal(FRAMES.length,4);assert.equal(CABS.length,4);
- assert.equal(MOBILITY.length,4);assert.equal(COMBAT.length,5);
- assert.equal(POWER.length,3);assert.equal(SUPPORT.length,6);
+ assert.equal(MOBILITY.length,5);assert.equal(COMBAT.length,5);
+ assert.equal(POWER.length,3);assert.equal(SUPPORT.length,8);
  assert.equal(new Set(FRAMES.map(x=>x.shape)).size,4);
  assert.equal(new Set(CABS.map(x=>x.form)).size,4);
- assert.equal(new Set(MOBILITY.map(x=>x.form)).size,4);
- assert.equal(MOBILITY.filter(x=>x.experimental).length,1);
+ assert.equal(new Set(MOBILITY.map(x=>x.form)).size,5);
+ assert.equal(MOBILITY.filter(x=>x.experimental).length,2);
  assert.ok(COMBAT.every(x=>x.source==='existing'),'Retain live game weapon IDs');
  assert.ok(POWER.every(x=>x.source==='existing'),'Retain generator IDs');
 });
@@ -32,19 +34,19 @@ test('Each frame has distinct typed usable socket geometry and required service 
  assert.ok(layouts.every(list=>new Set(list.map(x=>x.id)).size===list.length));
  for(const slots of layouts)for(const station of ['cab','combat','mobility','power'])
   assert.ok(slots.some(x=>x.station===station),station);
- assert.ok(new Set(layouts.map(l=>l.map(x=>x.id).sort().join('/'))).size>=3);
+ assert.ok(new Set(layouts.map(l=>l.map(x=>x.id+':'+x.pos.join(',')).sort().join('/'))).size===4);
 });
-test('Player can choose front vs roof cabs when they fit, but armored cab is deliberately front-only',()=>{
+test('Player can swap front/roof cabs on the Cradle instead of imposing old Wedge limits',()=>{
  const rig=defaultBuild();
- assert.equal(validSockets(rig,'cab','cab-armored').some(x=>x.id==='cab-top'),false);
- assert.equal(install(rig,'cab','cab-armored','cab-top').ok,false);
+ assert.equal(validSockets(rig,'cab','cab-armored').some(x=>x.id==='cab-top'),true);
+ assert.equal(install(rig,'cab','cab-armored','cab-top').ok,true);
  assert.equal(install(rig,'cab','cab-armored','cab-front').ok,true);
  assert.equal(inspect(rig).complete,true);
- assert.equal(install(rig,'cab','cab-bubble-gb','cab-front').ok,false);
+ assert.equal(install(rig,'cab','cab-bubble-gb','cab-front').ok,true);
  assert.equal(install(rig,'cab','cab-bubble-gb','cab-top').ok,true);
  assert.equal(changeFrame(rig,'frame-wedge').ok,true);
- assert.equal(rig.installed.cab,null,'Unsupported bubble-cab cannot falsely mount on wedge');
- assert.equal(inspect(rig).complete,false);
+ assert.equal(rig.installed.cab.id,'cab-bubble-gb','Cradle must support bubble canopy');
+ assert.equal(inspect(rig).complete,true);
 });
 test('Same weapon mounts at distinct compatible positions without changing its definition',()=>{
  const rig=defaultBuild(),id=rig.installed.combat.id;
@@ -55,7 +57,7 @@ test('Same weapon mounts at distinct compatible positions without changing its d
  }
  const changed=changeFrame(rig,'frame-utility');
  assert.equal(changed.ok,true);
- assert.equal(changed.moved.includes('combat'),true);
+ assert.equal(rig.installed.combat.socket,'combat-top');
  assert.equal(rig.installed.combat.id,id);
 });
 test('Optional support utilities can be asymmetric but cannot silently occupy required weapon sockets',()=>{
@@ -124,4 +126,55 @@ test('Every node carries explicit position, orientation, normal and load rules',
   for(const slot of slots.filter(s=>s.role==='rear'))
    assert.equal(slot.rotation[1],Math.PI);
  }
+});
+
+test('Stage 14: independently interchangeable machine housings, articulated combat carriers, stance and feet',()=>{
+ const rig=defaultBuild();
+ assert.equal(HOUSINGS.length,4);
+ assert.equal(CARRIERS.length,4);
+ assert.equal(STANCES.length,3);
+ assert.equal(FEET.length,3);
+ assert.deepEqual(rig.form,normalizeForm());
+ const initial=inspect(rig);
+ assert.equal(setForm(rig,'housing','drum').ok,true);
+ assert.equal(setForm(rig,'carrier','heavy').ok,true);
+ assert.equal(setForm(rig,'stance','low').ok,true);
+ assert.equal(setForm(rig,'feet','skid').ok,true);
+ assert.equal(inspect(rig).mass,initial.mass+135+260);
+ assert.equal(inspect(rig).complete,true);
+ assert.equal(rig.installed.combat.id,'gun-short','Carrier should not replace combat station');
+ assert.deepEqual(loadGraybox(exportGraybox(rig)),rig);
+ assert.equal(setForm(rig,'housing','nonexistent').ok,false);
+ assert.equal(rig.form.housing,'drum','Rejected configuration change must be atomic');
+});
+test('Stage 14: reference reinterpretations share a small stable module vocabulary',()=>{
+ const builds=Array.from({length:10},(_,i)=>recipe(i));
+ assert.equal(builds[2].installed.cab.id,'cab-bubble-gb');
+ assert.equal(builds[2].installed.mobility.id,'mobility-low-gb');
+ assert.equal(builds[4].form.housing,'rounded');
+ assert.equal(builds[8].form.housing,'drum');
+ assert.equal(builds[1].form.carrier,'heavy');
+ assert.equal(builds[5].form.carrier,'offset');
+ assert.ok(builds.filter(x=>x.form.carrier!=='direct').length>=7);
+ assert.ok(builds.filter(x=>x.form.feet!=='stock').length>=5);
+ for(let i=0;i<10;i++){
+  const check=inspect(builds[i]);
+  assert.equal(check.valid,true,i+': '+check.issues.join('; '));
+ }
+});
+test('Stage 14: rigid mating faces are explicit positions and orientations',()=>{
+ const input={position:[0,.3,-.1],rotation:[0,0,0]},
+  output={position:[.12,-.2,0],rotation:[0,Math.PI,0]};
+ const mate=matingTransform(input,output);
+ assert.deepEqual(mate.parent,[0,.3,-.1]);
+ assert.equal(mate.childEuler[1],Math.PI);
+ assert.throws(()=>matingTransform({},output));
+});
+test('Stage 14: older graybox v1 blueprints migrate form controls without losing required stations',()=>{
+ const old=exportGraybox(defaultBuild());
+ delete old.form;
+ const restored=loadGraybox(old);
+ assert.deepEqual(restored.form,normalizeForm());
+ assert.equal(inspect(restored).valid,true);
+ assert.equal(restored.installed.combat.id,old.installed.combat.id);
 });
