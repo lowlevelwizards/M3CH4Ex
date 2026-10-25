@@ -51,26 +51,46 @@ function additionalShells(root,category,id,paint){
  if(category==='cab'){
   for(const side of [-1,1]){
    clad(root,'enclosed cab side '+side,
-    [center.x+side*(size.x/2+.055),center.y-.06,center.z+.08],
+    [center.x+side*(size.x/2+.025),center.y-.06,center.z+.08],
     [.115,Math.max(.27,size.y*.63),Math.max(.30,size.z*.73)],mat);
+   // Two standoffs are held captive between cockpit structure and armor.
+   for(const sign of [-1,1])clad(root,'cab shell bolted standoff '+side+' '+sign,
+    [center.x+side*(size.x*.45),center.y+sign*size.y*.22,center.z+.08],
+    [.14,.12,.17],mat);
   }
   clad(root,'enclosed roof rim',
-   [center.x,bounds.max.y+.025,center.z+.03],
+   [center.x,bounds.max.y+.015,center.z+.03],
    [size.x*.89,.085,size.z*.76],mat);
+  for(const side of [-1,1])clad(root,'enclosed cockpit roof support '+side,
+    [center.x+side*size.x*.32,bounds.max.y-.027,center.z+.06],
+    [.12,.13,size.z*.57],mat);
  }else if(category==='frame'){
-  for(const side of [-1,1])
+  for(const side of [-1,1]){
    clad(root,'removable outboard shoulder fairing '+side,
     [center.x+side*(size.x*.40),center.y+.01,center.z-.03],
     [size.x*.19,size.y*.55,size.z*.46],mat);
-  clad(root,'removable belly protection',[center.x,bounds.min.y+.17,front],
+   for(const sign of [-1,1])clad(root,'frame cover steel bracket '+side+' '+sign,
+    [center.x+side*size.x*.30,center.y+sign*size.y*.21,center.z-.03],
+    [size.x*.21,.095,.18],mat);
+  }
+  clad(root,'removable belly protection',[center.x,bounds.min.y+.17,front+.03],
    [size.x*.46,.27,.105],mat);
+  for(const side of [-1,1])clad(root,'belly plate backing gusset '+side,
+   [center.x+side*size.x*.18,bounds.min.y+.17,front+.15],
+   [.13,.20,.26],mat);
  }else if(category==='combat'){
   clad(root,'breech upper armored shroud',
    [center.x,center.y+size.y*.28,center.z+size.z*.18],
    [size.x*.81,.13,size.z*.37],mat);
+  for(const sign of [-1,1])clad(root,'upper breech clamp '+sign,
+   [center.x+sign*size.x*.27,center.y+size.y*.18,center.z+size.z*.17],
+   [.11,size.y*.23,.18],mat);
   clad(root,'sacrificial breech side armor',
    [center.x+size.x*.45,center.y,center.z+size.z*.22],
    [.095,size.y*.62,size.z*.32],mat);
+  clad(root,'breech side backing frame',
+   [center.x+size.x*.35,center.y,center.z+size.z*.22],
+   [.21,size.y*.50,.17],mat);
  }
 }
 function stripNativeProtection(root,degree){
