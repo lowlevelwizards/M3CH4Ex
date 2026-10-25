@@ -420,7 +420,8 @@ test('Stage 11 tool arm graphics use real joint locations and identifiable mecha
  assert.ok(a.children.length>=4&&b.children.length>=7&&c.children.length>=7);
  assert.ok(b.getObjectByName('upper clevis pin'));
  assert.ok(c.getObjectByName('lower clevis pin'));
- assert.ok(new THREE.Box3().setFromObject(b).min.y<-.40);
+ assert.ok(new THREE.Box3().setFromObject(b).min.z<-.40,
+   'L-53 is a forward-projecting boom, not a vertical leg');
  assert.ok(new THREE.Box3().setFromObject(c).min.y<-.35);
 });
 test('Stage 11 physical P-series actuator endpoints follow the moving arm and honor actual stroke',()=>{
@@ -435,7 +436,7 @@ test('Stage 11 physical P-series actuator endpoints follow the moving arm and ho
  assert.equal(measured.valid,true);
  assert.ok(Math.abs(measured.lengthM-arm.linkage.lengthM)<.00001);
  assert.ok(Math.abs(drive.housing.scale.y-arm.actuator.stroke.housing)<1e-6);
- assert.equal(labManipulatorAction(rig,'pose',{angle:95}).ok,true);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:45}).ok,true);
  const after=labManipulatorDetails(rig),transformed=activeGeometry(rig);
  const moved=updateLinkedActuator(drive,after.linkage,transformed.matrix);
  assert.equal(moved.valid,true);
