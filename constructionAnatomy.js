@@ -9,11 +9,18 @@ import {YARDWALKER_LAYOUT} from './mobilityDefinitions.js';
 export const ANATOMY_ORDER=Object.freeze(['hip','thigh','knee','shin','ankle','foot']);
 export const ANATOMY_MASS=Object.freeze({hip:80,thigh:140,knee:65,shin:110,ankle:45,foot:60});
 export const ROOK_SHIN_KG=90;
+export const PYLON_SHIN_KG=135;
+export const PYLON_EXTENSION_M=.16;
+/** Structural joint coordinates are owned by the *installed component*.
+ * Both game visualization and grounded IK use these same definitions.
+ */
+export const SHIN_VARIANTS=Object.freeze(['original','rook','extended']);
 export const ANATOMY_SOCKET=Object.freeze({hip:'hip-core',thigh:'thigh',knee:'knee',shin:'shin',ankle:'ankle',foot:'foot'});
 const offset=(a,b)=>a.map((x,i)=>x-b[i]);
 export const anatomyId=(side,section,variant='original')=>
-  section==='shin' && variant==='rook'
-    ? 'rook-s2-shin-'+side : 'yard-'+section+'-'+side;
+  section==='shin' && variant==='rook'?'rook-s2-shin-'+side:
+  section==='shin' && variant==='extended'?'pylon-l1-shin-'+side:
+  'yard-'+section+'-'+side;
 export const alternativeShinId=side=>anatomyId(side,'shin','rook');
 export const standardShinId=side=>anatomyId(side,'shin');
 
@@ -37,19 +44,34 @@ for(const side of LEG_SIDES){
     position:[0,0,0],maxLoadKg:540,normal:[side==='left'?-1:1,0,0],
     roleHint:'leg-anatomy',description:'Authoritative hip-assembly connection'}];
   for(const section of ANATOMY_ORDER){
-    const ids=section==='shin'?[anatomyId(side,section),alternativeShinId(side)]:[anatomyId(side,section)];
-    for(const id of ids){
-      const variant=id===alternativeShinId(side)?'rook':'original';
-      const kg=variant==='rook'?ROOK_SHIN_KG:ANATOMY_MASS[section];
-      const attach=sockets[section];
+    const variants=section==='shin'?SHIN_VARIANTS:['original'];
+    for(const variant of variants){
+      const id=anatomyId(side,section,variant);
+      const kg=variant==='rook'?ROOK_SHIN_KG:
+        variant==='extended'?PYLON_SHIN_KG:ANATOMY_MASS[section];
+      const attach=section==='shin'?{
+        ...sockets.shin,
+        position:variant==='extended'?
+          [delta.ankle[0],delta.ankle[1]-PYLON_EXTENSION_M,delta.ankle[2]]
+          :[...delta.ankle]
+      }:sockets[section];
       const def={
         id,name:variant==='rook'?'Rook Industrial S2 / '+side+' narrow-spar shin':
+          variant==='extended'?'Pylon L1 / '+side+' extended-load shin':
           'Yardwalker '+side+' '+section,slot:'anatomy',side,
         section,variant,assemblyRole:'anatomy',massKg:kg,mountSize:'medium',
+        mechanical:section==='shin'?{
+          kneeReceiver:[0,0,0],ankleReceiver:[...attach.position],
+          spanM:Math.hypot(...attach.position),
+          nominalExtraReachM:variant==='extended'?PYLON_EXTENSION_M:0,
+          upperStandard:'medium',lowerStandard:'medium'
+        }:undefined,
         sockets:attach?[{...attach,standard:'medium',roleHint:'anatomy',
           normal:[0,1,0]}]:[],
         description:variant==='rook'
           ?'Narrow twin load spars and exposed axial drive. Uses the original knee and ankle interface geometry.'
+          :variant==='extended'
+          ?'160 mm longer knee-to-ankle span; dual load spars, braced central drive and service collars. Requires adapted stance and clearance checks.'
           :'Original authored '+section+' assembly, separable at mechanical interface.',
       };
       if(!BY_ID.has(id)){CATALOG.push(def);BY_ID.set(id,def);}
@@ -76,6 +98,30 @@ export function sectionStatus(assembly,side){
         massKg:BY_ID.get(node.definitionId).massKg}
         :{installed:false,serial:null,id:null,variant:null,massKg:0}];
     }))};
+}
+/** Installed geometry is the ONLY source used for foot reach.
+ * No pair-specific gait or hardcoded alternate ankle offsets.
+ */
+export function installedLimbGeometry(assembly,side){
+  if(!LEG_SIDES.includes(side))return null;
+  const shin=activeNode(assembly,side,'shin'),thigh=activeNode(assembly,side,'thigh');
+  if(!shin||!thigh)return null;
+  const shinDef=BY_ID.get(shin.definitionId);
+  const thighDef=BY_ID.get(thigh.definitionId);
+  const layout=YARDWALKER_LAYOUT.legs.find(l=>l.side===(side==='left'?-1:1));
+  const upperSocket=thighDef?.sockets?.find(s=>s.id==='knee');
+  const lowerSocket=shinDef?.sockets?.find(s=>s.id==='ankle');
+  if(!upperSocket||!lowerSocket)return null;
+  const upper=[upperSocket.position[1],upperSocket.position[2]];
+  const lower=[lowerSocket.position[1],lowerSocket.position[2]];
+  return {side,shinId:shinDef.id,variant:shinDef.variant,
+    upper,lower,
+    upperLengthM:Math.hypot(...upper),lowerLengthM:Math.hypot(...lower),
+    kneeToAnkle:[...lowerSocket.position],
+    referenceAnkleY:layout.ankle[1]-layout.hip[1],
+    referenceAnkleZ:layout.ankle[2]-layout.hip[2],
+    extraReachM:shinDef.mechanical?.nominalExtraReachM||0,
+    massKg:shinDef.massKg};
 }
 export function anatomyReadiness(assembly){
   if(!yardLegSupported(assembly))return true;
@@ -191,7 +237,7 @@ export function installAnatomyBranch(assembly,side,section,{variant='original'}=
  * A queued alternative with descendants must be disassembled first.
  */
 export function swapShin(assembly,side,variant='rook'){
-  if(!LEG_SIDES.includes(side)||!['rook','original'].includes(variant))
+  if(!LEG_SIDES.includes(side)||!SHIN_VARIANTS.includes(variant))
     return {ok:false,reason:'Unsupported side or shin'};
   return transaction(assembly,()=>{
     const old=activeNode(assembly,side,'shin');
