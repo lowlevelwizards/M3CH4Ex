@@ -77,8 +77,14 @@ export function deviceBinding(assembly,side){
  if(!drive||!thigh||!shin)return null;
  const target=assembly.labMechanisms?.[side]?.targetSerial;
  if(target!==shin.serial)return null;
+ const thighDef=BY_ID.get(thigh.definitionId),shinDef=BY_ID.get(shin.definitionId);
+ const mounting=thighDef?.sockets?.find(s=>s.id==='drive-mount'),
+   pin=shinDef?.mechanical?.driveAnchors?.[drive.definition.variant];
+ if(!mounting||!Array.isArray(pin)||pin.length!==3)return null;
  return {driveSerial:drive.serial,fromSerial:thigh.serial,
-   targetSerial:shin.serial,fromAnchor:'upper-drive',targetAnchor:'lower-drive'};
+   targetSerial:shin.serial,fromAnchor:'upper-drive',
+   targetAnchor:'lower-drive:'+drive.definition.variant,
+   fromLocal:[...mounting.position],targetLocal:[...pin]};
 }
 function mutate(assembly,fn){
  const snapshot=structuredClone(assembly);
