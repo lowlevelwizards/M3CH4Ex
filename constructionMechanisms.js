@@ -204,6 +204,16 @@ export function mechanismValidation(assembly){
   if(drive&&installedSection(assembly,side,'shin')&&!deviceBinding(assembly,side))
    errors.push(side+' actuator is missing its real second anchor');
  }
+ // Other branches (manipulators, auxiliary hinges, tools) may use the SAME
+ // hardware definitions through their own typed sockets. Registration follows
+ // graph ownership, not the anatomical name of a knee.
+ if(assembly.labManipulator?.attached){
+  const arm=assembly.labManipulator;
+  for(const serial of [arm.bearingSerial,arm.actuatorSerial]){
+   if(installed.has(serial))errors.push('Mechanism serial used in multiple machines');
+   installed.add(serial);
+  }
+ }
  for(const node of Object.values(graph.nodes)){
   const def=BY_ID.get(node.definitionId);
   if(def?.assemblyRole==='mechanism'&&!installed.has(node.serial))
