@@ -1,0 +1,40 @@
+name: Bootstrap minimal construction lab
+on:
+  push:
+    paths:
+      - ".github/workflows/bootstrap-lab.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout M3CH4Ex
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Checkout upstream experiment
+        uses: actions/checkout@v4
+        with:
+          repository: lowlevelwizards/M3CH4
+          ref: experiment/universal-construction
+          path: .source-m3ch4
+          persist-credentials: false
+      - name: Import only the lab dependency closure
+        run: python3 scripts/import_lab.py .source-m3ch4 .
+      - name: Check source syntax
+        run: |
+          while IFS= read -r file; do node --check "$file" || exit 1; done < <(find . -name '*.js' -o -name '*.mjs' | grep -v '^\./\.source-m3ch4/' | sort)
+        shell: bash
+      - name: Run focused construction tests
+        run: npm test
+      - name: Commit minimal lab to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- . ':!.source-m3ch4'
+          if ! git diff --cached --quiet; then
+            git commit -m "Import minimal standalone construction lab and checked dependencies"
+            git push origin HEAD:main
+          fi
