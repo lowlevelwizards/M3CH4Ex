@@ -4,6 +4,9 @@
 import * as THREE from 'three';
 import {BY_PART,socketsForFrame} from './grayboxCore.js';
 import {buildSharedVisual} from './grayboxSharedVisual.js';
+import './constructionManipulator.js';
+import {BY_ID} from './components.js';
+import {buildUniversalLinkVisual,buildManipulatorBracketVisual} from './constructionManipulatorVisual.js';
 const mat=(color,metalness=.23,opacity=1)=>new THREE.MeshStandardMaterial({
  color,metalness,roughness:.76,flatShading:true,transparent:opacity<1,opacity,
  side:THREE.DoubleSide});
@@ -224,13 +227,25 @@ function powerVisual(part,paint){
 function supportVisual(part,paint){
  const g=new THREE.Group(),main=mat(paint.main),secondary=mat(paint.secondary);
  switch(part.form){
-  case 'arm':
-   sphere(g,[0,0,0],.13,JOINT);
-   cylinder(g,[0,0,0],[0,-.40,-.12],.085,secondary);
-   sphere(g,[0,-.40,-.12],.105,JOINT);
-   cylinder(g,[0,-.40,-.12],[0,-.77,-.42],.078,secondary);
-   for(const x of [-.10,.10])box(g,[x,-.84,-.48],[.08,.23,.10],DARK);
+  case 'arm': {
+   // Reuse the Stage 11 machined load members, not the previous three
+   // unsupported graybox cylinders. The graybox poses them as one STATIC
+   // assembly; it does not pretend to add live combat manipulator behavior.
+   const base=buildManipulatorBracketVisual(BY_ID.get('construction-manip-bracket'));
+   g.add(base);
+   const upper=buildUniversalLinkVisual(BY_ID.get('construction-link-530'));
+   upper.rotation.x=-Math.PI/2;upper.position.set(0,-.11,-.14);
+   g.add(upper);
+   sphere(g,[0,-.61,-.03],.135,JOINT,'shared swivel joint');
+   const lower=buildUniversalLinkVisual(BY_ID.get('construction-link-430'));
+   lower.position.set(0,-.61,-.03);lower.rotation.x=-1.20;
+   g.add(lower);
+   // The fingers are a single generic end-effector, not simulated hand bones.
+   for(const sign of [-1,1])
+    box(g,[sign*.145,-1.05,-.20],[.087,.23,.12],DARK,'service gripper jaw');
+   g.userData.grayboxVisualSource='stage11-linked-service-arm';
    break;
+  }
   case 'sensor':
    box(g,[0,.14,-.12],[.39,.36,.35],secondary);
    for(const x of [-.11,.11])sphere(g,[x,.15,-.33],.089,GLASS);
@@ -250,6 +265,13 @@ function supportVisual(part,paint){
    cylinder(g,[0,0,0],[0,.64,0],.037,DARK);
    sphere(g,[0,.68,0],.13,mat('#ebb05b',.05,.85));
    break;
+ }
+ // Standardized physical attachment base, irrespective of its task.
+ // Bolted mounting blocks make otherwise dissimilar support gear look seated
+ // in the same attachment ecosystem.
+ box(g,[0,.055,.23],[.33,.30,.16],secondary,'auxiliary mount flange');
+ for(const sign of [-1,1]){
+  sphere(g,[sign*.115,.055,.318],.040,JOINT,'retaining bolt '+sign);
  }
  return g;
 }
