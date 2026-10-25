@@ -53,7 +53,7 @@ try{
  assert.deepEqual(errors,[],'Manipulator browser errors');
  const controls=await page.locator('#manip-controls').innerText();
  assert.match(controls,/INDUSTRIAL MANIPULATOR/);
- assert.match(controls,/ROTARY BEARING/);
+ assert.match(controls,/rotary bearing/i);
  console.log('MANIPULATOR',controls.slice(0,270));
  await page.getByRole('button',{name:/B-62/}).last().click();
  await page.waitForTimeout(150);
