@@ -18,8 +18,8 @@ aside{width:min(400px,37vw);background:#f9faf7;min-height:0;display:flex;flex-di
 .required-line span{border-bottom:2px solid #bdcfc3;padding-bottom:5px}
 #assessment{font-size:11px;color:#52685d;line-height:1.4;min-height:20px}
 #assessment .error{color:#b25b46}
-.section-head{display:grid;grid-template-columns:1fr 1.1fr .9fr;gap:5px;padding:9px 12px 0}
-.section-head button{padding:9px 4px;font-size:10px}
+.section-head{display:grid;grid-template-columns:.85fr 1.18fr .90fr 1.07fr;gap:5px;padding:9px 12px 0}
+.section-head button{padding:9px 2px;font-size:9px}
 button.active,button[aria-pressed=true],.section-head .active{background:#26443a;color:#fff;border-color:#26443a}
 .panel{padding:12px 14px;overflow:auto;flex:1;min-height:0}.panel[hidden]{display:none}
 .helper{font-size:11px;color:#687a6c;line-height:1.5;margin:0 0 14px}
@@ -59,3 +59,5 @@ label{font-size:12px;color:#44564a}select{padding:9px;width:100%;border:1px soli
  .view-controls{bottom:8px}.view-controls button{min-height:35px}
  .pending{bottom:57px}.palette{grid-template-columns:repeat(6,1fr)}
 }
+
+#audit-controls label{display:block;margin:10px 0}#audit-notes{padding:12px;background:#eef2eb;border-radius:10px;margin-top:12px;line-height:1.65}
