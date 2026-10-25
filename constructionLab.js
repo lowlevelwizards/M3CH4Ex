@@ -752,12 +752,14 @@ function buildModels(){
       // The original fixed decorative piston cannot track a rotating knee.
       // Hide it and draw one continuous, two-ended dynamic actuator below.
       for(const side of ARTICULATION_SIDES){
-        if(installedDevice(machine,side,'bearing')){
-          const kneeGroup=anatomyVisuals[side].knee;
-          kneeGroup.getObjectByName('Y5-'+side+'-exposed-industrial-knee')?.parent?.remove(
-            kneeGroup.getObjectByName('Y5-'+side+'-exposed-industrial-knee'));
-          kneeGroup.getObjectByName('Y5-'+side+'-joint-orange-face')?.parent?.remove(
-            kneeGroup.getObjectByName('Y5-'+side+'-joint-orange-face'));
+        // The original fixed knee bearings are no longer part of the knee
+        // housing. They MUST stay absent even when the serviceable bearing is
+        // detached; otherwise a ghost bearing visually powers an empty seat.
+        const kneeGroup=anatomyVisuals[side].knee;
+        for(const id of ['Y5-'+side+'-exposed-industrial-knee',
+          'Y5-'+side+'-joint-orange-face']){
+          const oldBearing=kneeGroup.getObjectByName(id);
+          oldBearing?.parent?.remove(oldBearing);
         }
         const old=anatomyVisuals[side].thigh.getObjectByName(
           'Y6-'+side+'-practical-linear-drive');
