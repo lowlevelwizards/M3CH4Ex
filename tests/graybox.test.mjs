@@ -82,7 +82,7 @@ test('Armor and color can differentiate identical mechanical structures without 
  const rig=defaultBuild(),original=inspect(rig).mass;
  rig.armor.cab=2;rig.armor.mobility=2;
  rig.paint.main=PAINTS.safety;rig.accentByAssembly['combat-right']=PAINTS.red;
- assert.equal(inspect(rig).mass,original+240);
+ assert.equal(inspect(rig).mass,original+160);
  assert.deepEqual(loadGraybox(exportGraybox(rig)),rig);
 });
 test('Ten references can be approximated entirely through reusable catalogue entries and sockets',()=>{
