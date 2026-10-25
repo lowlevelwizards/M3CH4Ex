@@ -189,6 +189,57 @@ export function buildPylonExtendedShin(side,ankleReceiver){
         [brace[0],brace[1],brace[2]+.08],[.32,.07,.09],'iron');
     return root;
 }
+/** Forge T2 compact upper-leg structure; receives the hip at its origin.
+ * The actual knee mount comes from the installed catalogue definition.
+ * Reuses unchanged hip and knee bearing assemblies, no cosmetic proxy joints.
+ */
+export function buildForgeCompactThigh(side,kneeReceiver){
+    if(!['left','right'].includes(side)||!Array.isArray(kneeReceiver)||kneeReceiver.length!==3)
+      throw Error('Forge thigh needs an authored knee receiver');
+    const sign=side==='left'?-1:1;
+    const end=[...kneeReceiver],root=new THREE.Group();
+    root.name='Forge T2 / '+side+' short-crank thigh';
+    root.userData={anatomicalSection:'thigh',anatomicalSide:side,variant:'forge-t2'};
+    for(const k of [-1,1]){
+      const x=k*.102;
+      taperedLink(root,`Forge-T2-${side}-${k}-offset-load-spar`,
+        [x,0,-.035],[end[0]+x,end[1],end[2]],.102,.082,.095,'charcoal');
+    }
+    taperedLink(root,'Forge-T2-closed-center-yoke',[0,-.035,.06],
+      [end[0],end[1]+.05,end[2]+.04],.16,.125,.15,'olive');
+    disk(root,'Forge-T2-hip-machined-receiver',[0,0,0],.143,.065,'bright','x');
+    disk(root,'Forge-T2-knee-machined-receiver',end,.136,.068,'iron','x');
+    block(root,'Forge-T2-offset-drive-cover',
+      [end[0]*.55,end[1]*.57,end[2]*.50-.06],[.25,.19,.16],'cream');
+    return root;
+}
+/** Dockpad F2 broad industrial stabilizer.
+ * Ankle mount is unchanged, but the declared contact surface is forty
+ * millimeters BELOW the original boot; the IK uses that exact offset.
+ */
+export function buildDockpadStabilizerFoot(side,contactDropM=.04){
+    if(!['left','right'].includes(side))throw Error('Invalid Dockpad side');
+    if(!Number.isFinite(contactDropM)||contactDropM<0||contactDropM>.1)
+      throw Error('Invalid Dockpad ground-contact datum');
+    const root=new THREE.Group(),w=.84,d=1.02,h=.15;
+    root.name='Dockpad F2 / '+side+' wide stabilizer foot';
+    root.userData={anatomicalSection:'foot',anatomicalSide:side,
+      variant:'dockpad-f2',contactDropM};
+    wedgeSole(root,'Dockpad-F2-wide-ground-sole',
+      [0,-contactDropM,d*.07],[w,h*.88,d*.85],
+      'charcoal',{toeTop:.10,crestZ:.02,rearTop:-.06});
+    for(const k of [-1,1]){
+      block(root,`Dockpad-F2-${k}-outboard-ground-pad`,
+        [k*(w*.34),-contactDropM-.008,-d*.25],[.22,.16,d*.38],'cream');
+      block(root,`Dockpad-F2-${k}-side-outrigger`,
+        [k*(w*.41),.038,d*.02],[.10,.16,d*.62],'olive');
+    }
+    block(root,'Dockpad-F2-forged-rear-heel',
+      [0,-contactDropM,d*.40],[w*.70,.115,d*.24],'iron');
+    block(root,'Dockpad-F2-central-ankle-load-footing',
+      [0,.065,.07],[.38,.12,.40],'teal');
+    return root;
+}
 /** Unrated fixed guides, never second independent mounting sockets. */
 export function buildYardwalkerGuideVisuals(plan){
     if(!plan?.ok||plan.bridges.length!==2)throw new Error('Invalid Yardwalker guide bridge plan.');
