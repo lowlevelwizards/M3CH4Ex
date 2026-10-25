@@ -6,12 +6,6 @@ import {buildPartVisual,SHARED_PART_IDS} from './partVisuals.js';
 import {applyPartFinish} from './partFinish.js';
 import {YARDWALKER_LAYOUT,KESTREL_LAYOUT,HAULER_LAYOUT} from './mobilityDefinitions.js';
 export const LIVE_VISUAL_IDS=new Set(SHARED_PART_IDS);
-const coating=new THREE.MeshStandardMaterial({
- color:0x959b94,metalness:.22,roughness:.77,flatShading:true
-});
-const metal=new THREE.MeshStandardMaterial({
- color:0x53615e,metalness:.38,roughness:.73,flatShading:true
-});
 const vec=p=>new THREE.Vector3(...p);
 function clad(parent,name,center,size,material){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),material);
@@ -29,6 +23,7 @@ function protectMobility(root,id,paint,armor){
  const layout={'legs-yard':YARDWALKER_LAYOUT,'legs-compact':KESTREL_LAYOUT,
   'legs-hauler':HAULER_LAYOUT}[id],paintMat=new THREE.MeshStandardMaterial({
   color:paint.main,metalness:.22,roughness:.75,flatShading:true});
+ paintMat.userData.grayboxOwned=true;
  for(const leg of layout.legs){
   const side=leg.side;
   // Deliberately link-based; the armor belongs to physical upper and lower
@@ -50,6 +45,7 @@ function additionalShells(root,category,id,paint){
  const size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
  const mat=new THREE.MeshStandardMaterial({
   color:paint.main,metalness:.23,roughness:.8,flatShading:true});
+ mat.userData.grayboxOwned=true;
  const front=bounds.min.z-.028;
  if(category==='mobility'){protectMobility(root,id,paint,2);return;}
  if(category==='cab'){
