@@ -1,12 +1,12 @@
 import {createLabMachine,labJointAction,labSectionAction,labInspection,labSectionDetails,
-  labAssistedPreset,labGrounding,labGuidedWalkFrame} from '../constructionLabCore.js';
+  labAssistedPreset,labGrounding,labGuidedWalkFrame,labMotionEnvelope} from '../constructionLabCore.js';
 import {BY_ID,graphWorldPoses} from '../components.js';
 import {calculateArticulatedMatrices,createActiveActuator,updateActiveActuator} from '../constructionArticulationVisual.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {buildPartVisual} from '../partVisuals.js';
-import {extractYardwalkerLeg,extractYardwalkerAnatomy,buildRookSparShin} from '../yardwalkerVisual.js';
+import {extractYardwalkerLeg,extractYardwalkerAnatomy,buildRookSparShin,buildPylonExtendedShin} from '../yardwalkerVisual.js';
 import {YARDWALKER_LAYOUT} from '../mobilityDefinitions.js';
 
 function boundsOf(object) {
@@ -204,6 +204,74 @@ test('08D two-step simulation pins supporting foot through both contact phases',
       const a=ankleWorld(rig,'left');
       assert.ok(Math.abs(a.z-(original.left.z-.25))<.003,'left landing anchor slid at t='+t);
       assert.ok(Math.abs(a.y-original.left.y)<.003);
+    }
+  }
+});
+
+test('08E authored Pylon geometry terminates precisely at the new ankle interface',()=>{
+  for(const side of ['left','right']){
+    const rig=createLabMachine();
+    const result=labSectionAction(rig,side,'shin','swap',{variant:'extended'});
+    assert.equal(result.ok,true,result.reason);
+    const sections=labSectionDetails(rig).find(l=>l.side===side).sections;
+    const def=BY_ID.get(sections.shin.id);
+    const shin=buildPylonExtendedShin(side,def.mechanical.ankleReceiver);
+    const upper=shin.getObjectByName('Pylon-L1-knee-interface');
+    const lower=shin.getObjectByName('Pylon-L1-ankle-interface');
+    assert.ok(upper&&lower,'Pylon must have identifiable true physical interfaces');
+    assert.ok(upper.position.length()<1e-6);
+    assert.ok(lower.position.distanceTo(new THREE.Vector3(...def.mechanical.ankleReceiver))<1e-6);
+    const assembled=activeGeometry(rig);
+    const shinPose=assembled.poses.get(sections.shin.serial);
+    const anklePose=assembled.poses.get(sections.ankle.serial);
+    assert.ok(Math.abs(anklePose.position[1]-shinPose.position[1]-def.mechanical.ankleReceiver[1])<1e-6);
+    assert.equal(def.mechanical.nominalExtraReachM,.16);
+    let meshes=0;shin.traverse(x=>{if(x.isMesh)meshes++});
+    assert.ok(meshes>=8,'Extended shin needs actual load spars, drive, joints, shielding');
+  }
+});
+test('08E mixed-length shin retains original planted ankle datum through neutral and crouch',()=>{
+  const stock=createLabMachine(),mixed=createLabMachine();
+  const reference={left:ankleWorld(stock,'left'),right:ankleWorld(stock,'right')};
+  const original=activeGeometry(mixed);
+  const before=labSectionDetails(mixed).find(x=>x.side==='left').sections.ankle.serial;
+  assert.equal(labSectionAction(mixed,'left','shin','swap',{variant:'extended'}).ok,true);
+  const unposed=activeGeometry(mixed);
+  const after=labSectionDetails(mixed).find(x=>x.side==='left').sections.ankle.serial;
+  assert.equal(before,after,'Ankle serial identity survives upstream replacement');
+  assert.ok(Math.abs(unposed.poses.get(after).position[1]-original.poses.get(before).position[1]+.16)<1e-6);
+  // Installing Pylon requests an actual neutral IK stance, placing the
+  // articulated ankle back on the shared original ground-contact plane.
+  for(const side of ['left','right']){
+    const a=ankleWorld(mixed,side);
+    assert.ok(a.distanceTo(reference[side])<.003,side+' must find shared standing ground');
+  }
+  const crouch=labAssistedPreset(mixed,'crouch');
+  assert.equal(crouch.ok,true,crouch.reason);
+  assert.equal(crouch.limited,true,'long leg restricts full 15 cm crouch');
+  for(const side of ['left','right']){
+    const a=ankleWorld(mixed,side);
+    assert.ok(a.distanceTo(reference[side])<.003,side+' must retain ground contact during reduced crouch');
+  }
+});
+test('08E extended side uses installed length IK through a reduced but continuous step cycle',()=>{
+  const rig=createLabMachine();
+  assert.equal(labSectionAction(rig,'right','shin','swap',{variant:'extended'}).ok,true);
+  const neutral={left:ankleWorld(rig,'left'),right:ankleWorld(rig,'right')};
+  const envelope=labMotionEnvelope(rig);
+  assert.equal(envelope.ok,true,envelope.reason);
+  for(let i=0;i<=40;i++){
+    const t=i/40;
+    const out=labGuidedWalkFrame(rig,t,envelope);
+    assert.equal(out.ok,true,'t='+t+' '+out.reason);
+    const g=labGrounding(rig);
+    if(g.feet.right.planted&&t<=.5){
+      const p=ankleWorld(rig,'right');
+      assert.ok(Math.abs(p.z-neutral.right.z)<.004,'planted Pylon ankle moved');
+    }
+    if(g.feet.left.planted&&t>=.55){
+      const p=ankleWorld(rig,'left');
+      assert.ok(Math.abs(p.z-(neutral.left.z-envelope.stepDistanceM))<.004,'other contact slipped');
     }
   }
 });
