@@ -4,6 +4,8 @@
 import * as THREE from 'three';
 import {BY_PART,socketsForFrame} from './grayboxCore.js';
 import {buildSharedVisual} from './grayboxSharedVisual.js';
+import {buildFrameExtensions,buildBodyHousing,buildWeaponCarrier,
+ buildFeetAccessory,buildFrameRiser} from './grayboxFormVisual.js';
 import './constructionManipulator.js';
 import {BY_ID} from './components.js';
 import {buildUniversalLinkVisual,buildManipulatorBracketVisual} from './constructionManipulatorVisual.js';
@@ -51,10 +53,17 @@ function frameVisual(frame,paint,armor){
   cylinder(g,[-w*.38,-h*.20,0],[w*.38,-h*.20,0],.08,metal);
   box(g,[0,.04,0],[w*.36,h*.68,d*.56],main);
  }else if(frame.shape==='wedge'){
-  box(g,[0,0,.12],[w,h*.72,d*.75],metal);
-  const front=box(g,[0,h*.14,-d*.30],[w*.90,h*.38,d*.36],main);
-  front.rotation.x=-.26;
-  box(g,[0,-h*.34,.02],[w*.82,h*.12,d*.63],DARK);
+  // Cradle is a low load tub, not a giant opaque slab that hides the cockpit.
+  box(g,[0,-h*.26,.04],[w*.81,h*.25,d*.76],metal,'cradle bottom load tray');
+  box(g,[0,-h*.32,.05],[w*.72,.12,d*.89],DARK,'hip mounting bridge');
+  for(const side of [-1,1]){
+   const x=side*w*.40;
+   cylinder(g,[x,-h*.31,-d*.33],[x,h*.40,-d*.33],.085,metal,'cradle forward post');
+   cylinder(g,[x,-h*.31,d*.29],[x,h*.23,d*.29],.079,metal,'cradle rear post');
+   box(g,[x,h*.30,-d*.09],[.16,.13,d*.69],main,'cradle dorsal rail');
+   sphere(g,[x,h*.19,-d*.31],.14,JOINT,'shoulder load node');
+  }
+  box(g,[0,h*.40,-d*.14],[w*.69,.11,d*.58],main,'canopy load shelf');
  }else if(frame.shape==='tall'){
   // SPAR: tall load tower with exposed side rails, crossmembers and trunnions.
   // The proportions, mounting sockets and capacity are independent of its skin.
@@ -98,10 +107,16 @@ function cabVisual(part,paint,armor){
   sphere(g,[0,.06,-.57],.193,GLASS);
   box(g,[0,.31,.08],[1.03,.12,.77],metal);
  }else if(part.form==='armored'){
-  box(g,[0,0,0],[1.15,.66,.90],metal);
-  box(g,[0,.14,-.47],[.79,.135,.105],DARK);
-  box(g,[0,-.08,-.5],[.91,.39,.10],main);
-  for(const x of [-.55,.55])box(g,[x,-.01,0],[.13,.53,.76],main);
+  // Protected operator tub is compact and can be wrapped in a larger hull.
+  box(g,[0,-.07,.04],[.91,.53,.83],metal,'armored operator cell');
+  box(g,[0,.20,.05],[.88,.10,.79],main,'removable upper crash lip');
+  box(g,[0,.065,-.398],[.57,.105,.095],DARK,'narrow periscope vision slit');
+  box(g,[0,-.13,-.405],[.67,.18,.085],main,'lower armored shutter');
+  for(const sign of [-1,1]){
+   box(g,[sign*.46,-.03,.02],[.09,.43,.71],main,'side armor flange');
+   sphere(g,[sign*.43,.07,.21],.075,JOINT,'cab service hinge');
+  }
+  box(g,[0,-.36,.08],[.70,.12,.63],DARK,'underbody command receiver');
  }else{
   // Rounded cab: an actual operator tub and canopy ring, not a ball on a cube.
   box(g,[0,-.28,.035],[1.03,.24,.94],metal,'welded pilot tub');
@@ -150,6 +165,23 @@ function legPair(g,form,primary,secondary,armor){
 }
 function mobilityVisual(part,paint,armor){
  const g=new THREE.Group(),primary=localMat(paint.main),secondary=localMat(paint.secondary);
+ if(part.form==='low'){
+  // Stubber: new low biped, not Kestrel merely scaled vertically.
+  box(g,[0,-.10,.05],[1.13,.18,.77],secondary,'short hip load bridge');
+  for(const sign of [-1,1]){
+   const hip=[sign*.54,-.04,.04],knee=[sign*.62,-.43,.22],
+    ankle=[sign*.64,-.92,-.08];
+   sphere(g,hip,.15,JOINT,'compact hip pivot');
+   cylinder(g,hip,knee,.125,secondary,'short link thigh');
+   sphere(g,knee,.13,JOINT,'stout knee pivot');
+   cylinder(g,knee,ankle,.13,secondary,'compressed load shin');
+   sphere(g,ankle,.105,JOINT,'compact ankle');
+   box(g,[ankle[0],-1.03,-.19],[.39,.17,.69],DARK,'broad planted boot');
+   if(armor>=1)box(g,[sign*.59,-.33,.10],[.27,.38,.35],primary,'stub thigh guard');
+   if(armor>=2)box(g,[sign*.64,-.73,.04],[.30,.32,.35],primary,'stub shin shell');
+  }
+  return g;
+ }
  if(part.form!=='quad'){legPair(g,part.form,primary,secondary,armor);return g;}
  // Crawler: one square load deck and four equal independent outboard legs.
  // Greybox only; do not claim this has a fourth live locomotion solver.
@@ -280,7 +312,8 @@ function supportVisual(part,paint){
  return g;
 }
 export function visualFor(type,part,paint,armor=0){
- const source=buildSharedVisual(type,part.id,paint,armor);
+ const source=(part.id==='frame-wedge'||part.id==='cab-armored')?null:
+  buildSharedVisual(type,part.id,paint,armor);
  if(source)return source;
  if(type==='frame')return frameVisual(part,paint,armor);
  if(type==='cab')return cabVisual(part,paint,armor);
@@ -331,18 +364,28 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
  const root=new THREE.Group(),sockets=[],objects=[];
  const frame=BY_PART.get(state.frame),paint=state.paint,
   frameColor={...paint,main:state.accentByAssembly.frame||paint.main};
- const body=visualFor('frame',frame,frameColor,state.armor.frame),
-   frameBounds=actualBounds(body);
+ const body=visualFor('frame',frame,frameColor,state.armor.frame);
+ buildFrameExtensions(body,state.frame,frameColor);
+ const frameBounds=actualBounds(body);
+ const housing=state.form?.housing||'none';
+ if(housing!=='none')body.add(buildBodyHousing(housing,frameBounds,frameColor));
  const mobMount=state.installed.mobility,
   mobilityPart=BY_PART.get(mobMount?.id),
   mobile=mobilityPart?visualFor('mobility',mobilityPart,{
    ...paint,main:state.accentByAssembly.mobility||paint.main
   },state.armor.mobility):null;
- const mobilityBounds=mobile?actualBounds(mobile):null;
+ let mobilityBounds=mobile?actualBounds(mobile):null;
+ if(mobile&&state.form?.feet&&state.form.feet!=='stock'){
+  mobile.add(buildFeetAccessory(state.form.feet,mobilityBounds,paint));
+  mobilityBounds=actualBounds(mobile);
+ }
  // Foot underside == 0; the lowest load-bearing frame interface overlaps
  // the native mobility crown rather than sitting on a disconnected neck.
  const height=mobilityBounds?mobilityBounds.max.y-mobilityBounds.min.y:1.57;
- const frameY=height-.07-frameBounds.min.y;
+ const stance=state.form?.stance||'normal';
+ const drop=stance==='low'?.15:stance==='tall'?-.20:0;
+ if(drop<0)body.add(buildFrameRiser(frameBounds,drop,paint));
+ const frameY=height-.07-frameBounds.min.y-drop;
  body.position.y=frameY;root.add(body);
  objects.push({category:'frame',group:body,source:body.userData.grayboxVisualSource||'graybox'});
  const allSockets=socketsForFrame(state.frame);
@@ -369,13 +412,20 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   const finish={...paint,main:state.accentByAssembly[mount.socket]||
     state.accentByAssembly[mount.category]||paint.main};
   const armor=state.armor[mount.category]??0;
-  const group=mount.category==='mobility'?mobile:visualFor(mount.category,part,finish,armor);
+  let group=mount.category==='mobility'?mobile:visualFor(mount.category,part,finish,armor);
   if(!group)continue;
+  const carrier=mount.category==='combat'?(state.form?.carrier||'direct'):'direct';
+  if(carrier!=='direct'){
+   group=buildWeaponCarrier(carrier,group,finish,socket.role==='left'?-1:1);
+  }
   const bb=mount.category==='mobility'?mobilityBounds:actualBounds(group),
    mid=bb.getCenter(new THREE.Vector3()),
    pt=physical.get(socket.id);
   let x=pt[0]-mid.x,y=frameY+pt[1]-mid.y,z=pt[2]-mid.z;
-  if(mount.category==='mobility'){
+  if(mount.category==='combat'&&carrier!=='direct'){
+   // Socket mates to the actual load-bearing shoulder pivot on the carrier.
+   x=pt[0];y=frameY+pt[1];z=pt[2];
+  }else if(mount.category==='mobility'){
    // Keep both actual shoes on the ground; allow the designed upper crown
    // to overlap the load bridge instead of inventing a floating hip block.
    x=-mid.x;y=-bb.min.y;z=-mid.z;
@@ -408,6 +458,8 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   // No implicit "every rear gun turns backwards": assemblies preserve -Z
   // forward, and authored socket orientation is applied only where relevant.
   group.rotation.set(...(socket.rotation||[0,0,0]));
+  group.userData.installedSocket=socket.id;
+  group.userData.rootMateWorld=[pt[0],pt[1]+frameY,pt[2]];
   root.add(group);
   objects.push({category:mount.category,group,socket:mount.socket,
    source:group.userData.grayboxVisualSource||'graybox'});
