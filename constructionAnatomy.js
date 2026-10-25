@@ -61,7 +61,7 @@ for(const side of LEG_SIDES){
       const kg=variant==='rook'?ROOK_SHIN_KG:
         variant==='extended'?PYLON_SHIN_KG:
         variant==='compact'?125:
-        variant==='stabilizer'?88:ANATOMY_MASS[section];
+        variant==='stabilizer'?69:ANATOMY_MASS[section];
       const attach=section==='shin'?{
         ...sockets.shin,
         position:variant==='extended'?
@@ -109,7 +109,7 @@ for(const side of LEG_SIDES){
           :variant==='compact'
           ?'75 mm shorter hip-to-knee linkage with twin offset compression spars. Compatible medium knee interface.'
           :variant==='stabilizer'
-          ?'Broad outriggers and 40 mm deeper contact sole; changes actual ground-contact height.'
+          ?'Lightweight crossbraced outriggers and 40 mm deeper contact sole within stock ankle load rating.'
           :'Original authored '+section+' assembly, separable at mechanical interface.',
       };
       if(!BY_ID.has(id)){CATALOG.push(def);BY_ID.set(id,def);}
