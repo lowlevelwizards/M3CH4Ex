@@ -6,6 +6,7 @@ import {BY_PART,socketsForBuild} from './grayboxCore.js';
 import {buildSharedVisual} from './grayboxSharedVisual.js';
 import {localSocket,socketHardware,makeMobilityAdapter} from './grayboxRigging.js';
 import {assessPhysicalContacts} from './grayboxPhysicalAudit.js';
+import {authoredMatingFace,matingFaceOpposesSocket} from './grayboxMatingFaces.js';
 import {buildFrameExtensions,buildBodyHousing,buildWeaponCarrier,
  buildFeetAccessory,buildFrameRiser,buildIndependentLegPlating} from './grayboxFormVisual.js';
 import './constructionManipulator.js';
@@ -559,6 +560,23 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
    group.rotation.y=pt[0]>0?Math.PI/2:-Math.PI/2;
   if(mount.category==='support'&&!socket.parent&&socket.role==='rear')
    group.rotation.y=0;
+  // Rear generators face the machine; a rear receiver does NOT rotate the
+  // generator's forward service flange or exhaust 180 degrees.
+  if(mount.category==='power'&&socket.role==='rear')group.rotation.y=0;
+  const authored=authoredMatingFace(mount.id,mount.category,socket.role,carrier);
+  if(authored){
+   if(!matingFaceOpposesSocket(authored,socket.normal))
+    throw new Error('Opposing mating normals required for '+mount.id+' at '+socket.id);
+   const faceOffset=new THREE.Vector3(...authored.point).applyEuler(group.rotation);
+   // Align the actual authored CHILD interface with the structural PARENT
+   // receiver. Outer armor and painted housings never affect this transform.
+   group.position.set(pt[0]-faceOffset.x,frameY+pt[1]-faceOffset.y,
+    pt[2]-faceOffset.z);
+   group.userData.authoredMatingFace={
+    ...authored,localPoint:[...authored.point],receiver:socket.id};
+  }else{
+   group.userData.mateFallback='Visual-envelope positioning pending an authored child port';
+  }
   group.userData.installedSocket=socket.id;
   group.userData.rootMateWorld=[pt[0],pt[1]+frameY,pt[2]];
   group.userData.visualMateType=socket.parent?'nested-assembly':'frame-structure';
