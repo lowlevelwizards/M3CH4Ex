@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import {BY_PART,socketsForBuild} from './grayboxCore.js';
 import {buildSharedVisual} from './grayboxSharedVisual.js';
 import {buildFrameExtensions,buildBodyHousing,buildWeaponCarrier,
- buildFeetAccessory,buildFrameRiser} from './grayboxFormVisual.js';
+ buildFeetAccessory,buildFrameRiser,buildIndependentLegPlating} from './grayboxFormVisual.js';
 import './constructionManipulator.js';
 import {BY_ID} from './components.js';
 import {buildUniversalLinkVisual,buildManipulatorBracketVisual} from './constructionManipulatorVisual.js';
@@ -379,6 +379,11 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   mobile.add(buildFeetAccessory(state.form.feet,mobilityBounds,paint));
   mobilityBounds=actualBounds(mobile);
  }
+ if(mobile&&(state.limbPlating?.left||state.limbPlating?.right)){
+  mobile.add(buildIndependentLegPlating(state.limbPlating,mobilityBounds,paint,
+    state.accentByAssembly));
+  mobilityBounds=actualBounds(mobile);
+ }
  // Foot underside == 0; the lowest load-bearing frame interface overlaps
  // the native mobility crown rather than sitting on a disconnected neck.
  const height=mobilityBounds?mobilityBounds.max.y-mobilityBounds.min.y:1.57;
@@ -389,7 +394,7 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
  body.position.y=frameY;root.add(body);
  objects.push({category:'frame',group:body,source:body.userData.grayboxVisualSource||'graybox'});
  const allSockets=socketsForBuild(state);
- const physical=new Map(allSockets.map(socket=>[
+ const physical=new Map(allSockets.filter(socket=>!socket.parent).map(socket=>[
   socket.id,physicalSocketPosition(socket,frameBounds)
  ]));
 
