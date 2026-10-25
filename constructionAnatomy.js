@@ -6,6 +6,7 @@ import {CATALOG,BY_ID,assemblyGraph,proposeAttachment,proposeRemoval,validateGra
 import {LEG_SIDES,YARD_LEG_IDS,ownedLeg,yardLegSupported,YARD_LEG_KG} from './constructionLegs.js';
 import {YARDWALKER_LAYOUT} from './mobilityDefinitions.js';
 import {proposeComponentReplacement} from './assemblyGraph.js';
+import {DEVICE_TYPES,refreshDeviceTarget} from './constructionMechanisms.js';
 
 export const ANATOMY_ORDER=Object.freeze(['hip','thigh','knee','shin','ankle','foot']);
 export const ANATOMY_MASS=Object.freeze({hip:80,thigh:140,knee:65,shin:110,ankle:45,foot:60});
@@ -101,7 +102,16 @@ for(const side of LEG_SIDES){
         sockets:attach?[{...attach,standard:'medium',
           acceptsRole:section==='hip'?'thigh':section==='thigh'?'knee':
             section==='knee'?'shin':section==='shin'?'ankle':'foot',
-          roleHint:'anatomy',normal:[0,1,0]}]:[],
+          roleHint:'anatomy',normal:[0,1,0]},
+          ...(section==='thigh'?[{id:'drive-mount',position:[
+            layout.side*.155,-.104,.125],standard:'light',maxLoadKg:35,
+            acceptsRole:DEVICE_TYPES.actuator,normal:[0,1,0],
+            anchorId:'upper-drive',roleHint:'mechanism'
+          }]:[]),
+          ...(section==='knee'?[{id:'bearing-seat',position:[0,0,0],
+            standard:'light',maxLoadKg:30,acceptsRole:DEVICE_TYPES.bearing,
+            normal:[layout.side,0,0],roleHint:'mechanism'}]:[])
+        ]:[],
         description:variant==='rook'
           ?'Narrow twin load spars and exposed axial drive. Uses the original knee and ankle interface geometry.'
           :variant==='extended'
@@ -300,6 +310,7 @@ export function replaceAnatomyComponent(assembly,side,section,variant){
     stow(assembly,old.serial,[old]);
     if(assembly.labStowed)delete assembly.labStowed[next.serial];
     assembly.graph=proposal.graph;
+    if(section==='shin')refreshDeviceTarget(assembly,side);
     return {side,section,variant,serial:next.serial,
       replaced:old.serial,retainedDescendants:proposal.retainedDescendants};
   });
