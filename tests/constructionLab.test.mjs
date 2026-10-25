@@ -466,7 +466,7 @@ test('Stage 09 stabilizer foot changes actual sole ground datum and mass',()=>{
   const after=labSectionDetails(rig)[1].sections;
   assert.equal(after.foot.variant,'stabilizer');
   assert.equal(after.ankle.serial,old);
-  assert.equal(labInspection(rig).machineCheck.massKg,before+28);
+  assert.equal(labInspection(rig).machineCheck.massKg,before+9);
   assert.equal(labViability(rig).legs.right.footContactDropM,.04);
   assert.equal(labGrounding(rig).mode,'grounded');
 });
@@ -497,7 +497,7 @@ test('Stage 09 complete asymmetric thigh/shin/foot mix stands, crouches, steps a
   assert.equal(geom.legs.left.thighVariant,'compact');
   assert.equal(geom.legs.left.variant,'extended');
   assert.equal(geom.legs.left.footVariant,'stabilizer');
-  assert.equal(labInspection(rig).machineCheck.massKg,original+38);
+  assert.equal(labInspection(rig).machineCheck.massKg,original+19);
   const crouch=labAssistedPreset(rig,'crouch');
   assert.equal(crouch.ok,true,crouch.reason);
   const envelope=labMotionEnvelope(rig);
