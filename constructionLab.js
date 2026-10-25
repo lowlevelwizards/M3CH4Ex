@@ -291,19 +291,28 @@ function renderInspection(){
       :'This section has no attached children.';
     card.append(note);
     if(ARTICULATION_JOINTS.includes(section))jointControl(side,section,card);
-    if(section==='shin'){
+    if(['thigh','shin','foot'].includes(section)){
       const mechanics=selectedSection.mechanical;
-      if(mechanics){
-        const size=document.createElement('p');size.className='meta';
-        size.textContent='KNEE → ANKLE '+Math.round(mechanics.spanM*1000)+' mm'+
-          ' · EXTRA VERTICAL REACH '+Math.round(mechanics.nominalExtraReachM*1000)+' mm'+
-          ' · standard '+mechanics.upperStandard+'/'+mechanics.lowerStandard;
-        card.append(size);
-      }
-      for(const [variant,label] of [['original','YARDWALKER'],['rook','ROOK S2'],['extended','PYLON L1']]){
+      const specs=section==='thigh'
+        ?'HIP → KNEE '+Math.round(mechanics.spanM*1000)+' mm'
+        :section==='shin'
+          ?'KNEE → ANKLE '+Math.round(mechanics.spanM*1000)+' mm'
+          :'CONTACT DROP '+Math.round(mechanics.groundContactDropM*1000)+' mm'+
+            ' · PAD '+Math.round(mechanics.footprintM[0]*100)+'×'+
+            Math.round(mechanics.footprintM[1]*100)+' cm';
+      const size=document.createElement('p');size.className='meta';
+      size.textContent=specs+' · '+selectedSection.mountInterface.standard.toUpperCase()+
+        ' MECHANICAL INTERFACE';
+      card.append(size);
+      const choices=section==='thigh'
+        ?[['original','STOCK'],['compact','FORGE T2']]
+        :section==='shin'
+          ?[['original','STOCK'],['rook','ROOK S2'],['extended','PYLON L1']]
+          :[['original','STOCK'],['stabilizer','DOCKPAD F2']];
+      for(const [variant,label] of choices){
         if(variant===selectedSection.variant)continue;
-        const replace=button('REPLACE SHIN → '+label,
-          ()=>doSectionAction(side,'shin','swap',{variant}));
+        const replace=button('REPLACE '+section.toUpperCase()+' → '+label,
+          ()=>doSectionAction(side,section,'swap',{variant}));
         replace.style.width='100%';replace.style.marginBottom='5px';card.append(replace);
       }
     }
@@ -359,7 +368,7 @@ function renderInspection(){
     }
   }
   const info=document.createElement('p');info.className='explain';
-  info.textContent='Stage 08E: shin-specific reach, authored joint anchors and compatible geometry. Mismatched legs can require reduced crouch or step travel; full balance physics remains deferred.';
+  info.textContent='Stage 09: universal typed replacement keeps upstream and supported child interfaces valid. Mixed geometry changes knee reach, ankle location and the sole’s ground-contact datum.';
   inspect.append(info);
 }
 /** A joint belongs to the bearing, not to the meshes being rotated.
@@ -479,9 +488,11 @@ function renderPosePanel(){
     const leg=viability.legs?.[side];
     if(!leg)continue;
     const p=document.createElement('p');p.className='meta';
-    p.textContent=side.toUpperCase()+' / '+leg.variant.toUpperCase()+
-      ' · SHIN '+Math.round(leg.lowerLengthM*1000)+' mm · REACH +'+
-      Math.round(leg.extraReachM*1000)+' mm';
+    p.textContent=side.toUpperCase()+' / '+leg.thighVariant.toUpperCase()+
+      ' THIGH '+Math.round(leg.upperLengthM*1000)+' mm · '+
+      leg.variant.toUpperCase()+' SHIN '+Math.round(leg.lowerLengthM*1000)+
+      ' mm · '+leg.footVariant.toUpperCase()+' FOOT · SOLE '+
+      Math.round(leg.footContactDropM*1000)+' mm DEEPER';
     reportBox.append(p);
   }
   if(viability.walkPreview){
@@ -794,7 +805,7 @@ function rebuild(fit=true){
   const yard=verdict.mobility;
   stats.textContent=nr+' NODES · '+Math.round(verdict.machineCheck.massKg)+' KG'+
     (yard.legs?' · '+yard.legs+'/2 LEGS':'');
-  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 08E · GEOMETRY':'STAGE 08E · INCOMPLETE';
+  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 09 · MIXED PARTS':'STAGE 09 · INCOMPLETE';
   if(!verdict.valid)setMessage(verdict.graphCheck.errors.join(' | '),true);
   else if(!verdict.ready)setMessage(verdict.mobility.complete?
     'Structurally valid · not combat-ready in live rules':
