@@ -33,44 +33,50 @@ export function buildYardwalkerVisual(fixture,layout=YARDWALKER_LAYOUT){
         // Its local origin is exactly YARDWALKER_LAYOUT.legs[].hip.
         const legRoot=groupAt(carriage,`yard-leg-${word}`,leg.hip);
         legRoot.userData={assemblySide:word,assemblyType:'yardwalker-leg'};
-        chamferBlock(legRoot,`Y3-${word}-square-hip-load-block`,
+        const hipSection=groupAt(legRoot,`yard-section-hip-${word}`,[0,0,0]);
+        chamferBlock(hipSection,`Y3-${word}-square-hip-load-block`,
             sub([side*.645,.525,.08],leg.hip),[.35,.34,.34],.105,'olive');
-        const hip=groupAt(legRoot,`${word}Hip`,[0,0,0]);
+        const hip=groupAt(hipSection,`${word}Hip`,[0,0,0]);
         bearing(hip,`Y3-${word}-visible-hip-bearing`,[0,0,0],
             layout.hip.radius,layout.hip.width,side,'teal');
+        const thigh=groupAt(hip,`yard-section-thigh-${word}`,[0,0,0]);
         const kneeOffset=sub(leg.knee,leg.hip);
-        taperedLink(hip,`Y4-${word}-angled-upper-load-beam`,[0,0,0],kneeOffset,
+        taperedLink(thigh,`Y4-${word}-angled-upper-load-beam`,[0,0,0],kneeOffset,
             .29,.245,.24,'cream');
-        taperedLink(hip,`Y4-${word}-outer-upper-guard`,
+        taperedLink(thigh,`Y4-${word}-outer-upper-guard`,
             [side*.075,-.095,-.10],
             [kneeOffset[0]+side*.065,kneeOffset[1]+.085,kneeOffset[2]-.09],
             .125,.11,.06,'olive');
-        actuator(hip,`Y6-${word}-practical-linear-drive`,
+        actuator(thigh,`Y6-${word}-practical-linear-drive`,
             sub(leg.actuatorTop,leg.hip),sub(leg.actuatorBottom,leg.hip),side);
-        const knee=groupAt(hip,`${word}Knee`,kneeOffset);
+        const kneeSection=groupAt(thigh,`yard-section-knee-${word}`,kneeOffset);
+        const knee=groupAt(kneeSection,`${word}Knee`,[0,0,0]);
         bearing(knee,`Y5-${word}-exposed-industrial-knee`,[0,0,0],
             layout.knee.radius,layout.knee.width,side,'orange');
         disk(knee,`Y5-${word}-joint-orange-face`,
             [side*(layout.knee.width/2+.015),0,0],.128,.016,'orange','x');
+        const shin=groupAt(knee,`yard-section-shin-${word}`,[0,0,0]);
         const ankleOffset=sub(leg.ankle,leg.knee);
-        taperedLink(knee,`Y7-${word}-structural-shin`,[0,0,0],ankleOffset,
+        taperedLink(shin,`Y7-${word}-structural-shin`,[0,0,0],ankleOffset,
             .30,.215,.24,'iron');
         // k.3a.8: the calf owns the Yardwalker silhouette. It is full around the
         // upper/mid shin, then visibly pinches toward the serviceable ankle.
-        taperedLink(knee,`Y7-${word}-shaped-olive-calf`,
+        taperedLink(shin,`Y7-${word}-shaped-olive-calf`,
             [side*.10,-.035,-.005],
             [ankleOffset[0]+side*.06,ankleOffset[1]+.065,ankleOffset[2]-.005],
             .29,.155,.17,'olive');
-        taperedLink(knee,`Y7-${word}-cream-front-load-face`,
+        taperedLink(shin,`Y7-${word}-cream-front-load-face`,
             [0,-.075,-.135],
             [ankleOffset[0],ankleOffset[1]+.07,ankleOffset[2]-.095],
             .205,.13,.055,'cream');
-        const ankle=groupAt(knee,`${word}Ankle`,ankleOffset);
+        const ankleSection=groupAt(shin,`yard-section-ankle-${word}`,ankleOffset);
+        const ankle=groupAt(ankleSection,`${word}Ankle`,[0,0,0]);
         bearing(ankle,`Y8-${word}-plain-machined-ankle`,[0,0,0],
             layout.ankle.radius,layout.ankle.width,side,'bright');
         const footOffset=sub(leg.foot,leg.ankle);
         link(ankle,`Y8-${word}-ankle-to-sole-shank`,[0,0,0],footOffset,.15,.18,'iron');
-        const foot=groupAt(ankle,`${word}Foot`,footOffset);
+        const footSection=groupAt(ankle,`yard-section-foot-${word}`,footOffset);
+        const foot=groupAt(footSection,`${word}Foot`,[0,0,0]);
         const [w,h,d]=layout.footSize;
         // A continuous work-boot sole carries the silhouette; the two toe pads
         // are squared wear blocks, not claws or runner prongs.
@@ -103,6 +109,52 @@ export function extractYardwalkerLeg(root,side){
     group.position.set(0,0,0);
     group.rotation.set(0,0,0);
     return group;
+}
+/** Subdivide a detached original leg into actual authored groups, deepest first.
+ * Each returned object's origin is its mating interface. The graph owns all
+ * subsequent translations; no mesh or joint is duplicated or regenerated.
+ */
+export function extractYardwalkerAnatomy(legRoot,side){
+    if(!['left','right'].includes(side))throw new Error('Unknown leg side');
+    const parts={};
+    for(const role of ['foot','ankle','shin','knee','thigh','hip']){
+        const group=legRoot.getObjectByName('yard-section-'+role+'-'+side);
+        if(!group||!group.parent)throw new Error('Missing '+side+' '+role+' authored anatomy');
+        group.parent.remove(group);
+        group.position.set(0,0,0);group.rotation.set(0,0,0);
+        group.userData={...group.userData,anatomicalSection:role,anatomicalSide:side};
+        parts[role]=group;
+    }
+    return parts;
+}
+/** First additional, compatible lower-leg design. This is an engineered
+ * alternate between the EXACT original knee and ankle anchors. Narrow twin
+ * load spars carry the structural force; the central rod is an exposed drive.
+ * No feet, knee or ankle are hidden in this variant's geometry.
+ */
+export function buildRookSparShin(side,layout=YARDWALKER_LAYOUT){
+    if(!['left','right'].includes(side))throw new Error('Unknown leg side');
+    const leg=layout.legs.find(l=>l.side===(side==='left'?-1:1));
+    if(!leg)throw new Error('Missing leg geometry data');
+    const end=sub(leg.ankle,leg.knee);
+    const sign=leg.side;
+    const root=new THREE.Group();root.name='Rook S2 / '+side+' narrow-spar shin';
+    root.userData={anatomicalSection:'shin',anatomicalSide:side,variant:'rook-s2'};
+    const offset=.095;
+    for(const k of [-1,1]){
+        const x=k*offset;
+        taperedLink(root,'Rook-'+side+'-'+(k<0?'inner':'outer')+'-load-spar',
+            [x,0,0],[end[0]+x,end[1],end[2]],.085,.065,.095,'charcoal');
+    }
+    taperedLink(root,'Rook-axial-hydraulic-carrier',
+        [0,-.01,0],[end[0],end[1]+.015,end[2]],.105,.077,.10,'bright');
+    disk(root,'Rook-S2-knee-receiver',[0,0,0],.123,.075,'iron','x');
+    disk(root,'Rook-S2-ankle-receiver',end,.105,.066,'iron','x');
+    // One externally legible, compact service shield; no unrelated floating pieces.
+    const mid=end.map(x=>x*.48);
+    block(root,'Rook-S2-service-collar',
+        [mid[0],mid[1],mid[2]-.03],[.24,.13,.19],'teal');
+    return root;
 }
 /** Unrated fixed guides, never second independent mounting sockets. */
 export function buildYardwalkerGuideVisuals(plan){
