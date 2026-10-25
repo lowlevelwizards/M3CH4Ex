@@ -139,8 +139,9 @@ export function removeDevice(assembly,side,type){
 }
 export function refreshDeviceTarget(assembly,side){
  const drive=installedDevice(assembly,side,'actuator');
- if(drive&&installedSection(assembly,side,'shin'))
-  assembly.labMechanisms[side].targetSerial=installedSection(assembly,side,'shin').serial;
+ if(drive&&assembly.labMechanisms?.[side])
+  assembly.labMechanisms[side].targetSerial=
+    installedSection(assembly,side,'shin')?.serial||null;
 }
 /** Reattach previously owned universal devices after temporarily lifting an
  * entire leg, changing stations, or restoring a serviceable anatomical branch.
@@ -193,7 +194,8 @@ export function mechanismValidation(assembly){
    if(device&&device.definition.device!==type)errors.push('Wrong type on '+side+' '+type);
   }
   const drive=installedDevice(assembly,side,'actuator');
-  if(drive&&!deviceBinding(assembly,side))errors.push(side+' actuator is missing its real second anchor');
+  if(drive&&installedSection(assembly,side,'shin')&&!deviceBinding(assembly,side))
+   errors.push(side+' actuator is missing its real second anchor');
  }
  for(const node of Object.values(graph.nodes)){
   const def=BY_ID.get(node.definitionId);
