@@ -57,7 +57,13 @@ export const SUPPORT=Object.freeze([
 ]);
 export const CATALOG=Object.freeze({frame:FRAMES,cab:CABS,combat:COMBAT,mobility:MOBILITY,power:POWER,support:SUPPORT});
 export const BY_PART=new Map(Object.values(CATALOG).flat().map(x=>[x.id,x]));
-const S=(id,label,station,role,pos,capacity=850,standard='M')=>({id,label,station,role,pos,capacity,standard});
+const S=(id,label,station,role,pos,capacity=850,standard='M')=>{
+ const normals={under:[0,-1,0],roof:[0,1,0],front:[0,0,-1],
+  rear:[0,0,1],core:[0,0,1],left:[-1,0,0],right:[1,0,0]};
+ const normal=role==='side'?[pos[0]<0?-1:1,0,0]:normals[role];
+ return {id,label,station,role,pos,capacity,standard,
+  normal:[...normal],rotation:role==='rear'?[0,Math.PI,0]:[0,0,0]};
+};
 /** Local frame coordinates, y-up and forward=-z; slot rotation is physical.
  * A station is required; a socket determines where its assembly is installed.
  */
