@@ -1,6 +1,6 @@
-/** M3CH4 white-room construction laboratory. Stage 06:
- * Real, individually owned Yardwalker legs, authored hip sockets and detach /
- * reinstall operations. Shins, universal attachments and combat are deferred.
+/** M3CH4 white-room construction laboratory. Stage 08:
+ * Real mechanical single-axis hinges, two-ended actuators and pose inspection.
+ * Controlled kinematics only; not dynamics, balance or gait locomotion.
  */
 import * as THREE from 'three';
 import { CATALOG, BY_ID, SLOT_CENTERS, graphWorldPoses } from './components.js';
@@ -9,10 +9,13 @@ import { buildFitFixture } from './chassisFitVisuals.js';
 import { fitFixtureFor } from './chassisFitFixtures.js';
 import { rotatedY } from './assemblyGraph.js';
 import { extractYardwalkerLeg, extractYardwalkerAnatomy, buildRookSparShin } from './yardwalkerVisual.js';
+import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,PRESET_NAMES,articulationReport} from './constructionArticulation.js';
+import {applyArticulatedModels,createActiveActuator,updateActiveActuator,coarseClearanceHints} from './constructionArticulationVisual.js';
 import {
   createLabMachine, labInspection, labEquip, labSetGeneratorMount, labBlueprint,
   loadLabBlueprint, labNodeList, labLegAction, labLegDetails,
-  labSectionAction, labSectionDetails, labStowed, LAB_SLOTS
+  labSectionAction, labSectionDetails, labStowed,
+  labJointAction,labPosePreset,labPose,LAB_SLOTS
 } from './constructionLabCore.js';
 
 const $=id=>document.getElementById(id);
@@ -23,6 +26,8 @@ const slotLabels={structure:'FRAME',mobility:'MOBILITY',power:'POWER',command:'C
 let machine=createLabMachine(), selectedSlot='structure', selectedSerial=machine.installed.structure;
 let selectedSocket=null;
 let currentTab='catalog', isolate=false, rayTargets=[], sockets=[],partRoots=new Map(), nodeWorldPoses=new Map();
+let actuators=[],poseAnimation=null,animationToken=0;
+let clearance={warnings:[],status:'Not yet checked'};
 const viewMap={quarter:[2.42,.22],front:[Math.PI,.08],side:[Math.PI/2,.10],top:[Math.PI,1.47]};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 let azimuth=viewMap.quarter[0], elevation=viewMap.quarter[1], distance=8;
@@ -377,7 +382,7 @@ function clearGeometry(parent){
 function buildModels(){
   clearGeometry(partGroup);clearGeometry(markerGroup);
   partGroup.position.set(0,0,0);
-  partRoots.clear();rayTargets=[];sockets=[];
+  partRoots.clear();rayTargets=[];sockets=[];actuators=[];
   const inspection=labInspection(machine),graph=inspection.graph;
   const frame=own(graph.root),frameDef=BY_ID.get(frame?.definitionId);
   if(!frameDef){setMessage('Missing structural frame.',true);return;}
@@ -400,6 +405,13 @@ function buildModels(){
         left:extractYardwalkerAnatomy(yardwalkerLegVisuals.left,'left'),
         right:extractYardwalkerAnatomy(yardwalkerLegVisuals.right,'right')
       };
+      // The original fixed decorative piston cannot track a rotating knee.
+      // Hide it and draw one continuous, two-ended dynamic actuator below.
+      for(const side of ARTICULATION_SIDES){
+        const old=anatomyVisuals[side].thigh.getObjectByName(
+          'Y6-'+side+'-practical-linear-drive');
+        if(old)old.visible=false;
+      }
     } else if(def?.assemblyRole==='leg'){
       if(!yardwalkerLegVisuals?.[def.side])
         throw new Error('A leg cannot render without the owning Yardwalker carriage');
@@ -418,6 +430,18 @@ function buildModels(){
     partGroup.add(model);partRoots.set(node.serial,model);
     model.traverse(obj=>{if(obj.isMesh){obj.userData.labSerial=node.serial;rayTargets.push(obj);}});
   });
+  if(yardwalkerLegVisuals){
+    for(const side of ARTICULATION_SIDES){
+      const actuator=createActiveActuator(side);
+      actuator.group.userData.mechanicalSide=side;
+      partGroup.add(actuator.group);actuators.push(actuator);
+      const knee=nodes.find(n=>BY_ID.get(n.definitionId)?.assemblyRole==='anatomy'&&
+        BY_ID.get(n.definitionId)?.side===side&&BY_ID.get(n.definitionId)?.section==='knee');
+      if(knee)actuator.group.traverse(obj=>{
+        if(obj.isMesh){obj.userData.labSerial=knee.serial;rayTargets.push(obj);}
+      });
+    }
+  }
   let bounds=new THREE.Box3().setFromObject(partGroup);
   if(!bounds.isEmpty()){
     partGroup.position.y-=bounds.min.y;
@@ -434,6 +458,7 @@ function buildModels(){
       const relative=rotatedY(socket.position,pose.rotationQuarterTurns);
       orb.position.set(pose.position[0]+relative[0],pose.position[1]+relative[1]+partGroup.position.y,pose.position[2]+relative[2]);
       orb.userData.socketParent=node.serial;orb.userData.socketId=socket.id;
+      orb.userData.socketOffset=[...socket.position];
       markerGroup.add(orb);sockets.push(orb);
     }
   }
@@ -443,23 +468,34 @@ function buildModels(){
 }
 function applyExplode(){
   const fraction=Number(explode.value)/100;
-  const rootPart=partRoots.get(labInspection(machine).graph.root);
-  const center=rootPart?rootPart.position:new THREE.Vector3();
-  for(const [serial,model] of partRoots){
-    const pose=nodeWorldPoses.get(serial);
-    if(!pose)continue;
-    model.position.set(...pose.position);
-    if(serial===labInspection(machine).graph.root)continue;
-    const vector=model.position.clone().sub(center);
-    if(vector.length()<.12)vector.set(serial.includes('AD-')?0:-1,1,.3);
-    vector.normalize();
-    model.position.addScaledVector(vector,fraction*.9);
+  const report=labInspection(machine),graph=report.graph;
+  const cache=applyArticulatedModels(graph,nodeWorldPoses,machine,partRoots,fraction);
+  // Keep socket inspection markers at their articulated interfaces.
+  for(const marker of sockets){
+    const base=cache.get(marker.userData.socketParent);
+    if(!base)continue;
+    marker.position.copy(new THREE.Vector3(...marker.userData.socketOffset).applyMatrix4(base.matrix));
+    marker.position.y+=partGroup.position.y;
   }
-  markerGroup.visible=socketToggle.checked&&fraction<.01;
+  for(const actuator of actuators){
+    const status=updateActiveActuator(actuator,machine,cache,graph,nodeWorldPoses);
+    actuator.group.visible=status.visible&&!isolate&&fraction<.01;
+  }
+  partGroup.updateMatrixWorld(true);
+  clearance=fraction===0?coarseClearanceHints(graph,partRoots):
+    {warnings:[],status:'Hide exploded view to inspect coarse clearance'};
+  markerGroup.visible=!isolate&&socketToggle.checked&&fraction<.01;
   refreshSelection();
+  updatePoseDiagnostics();
 }
 function applyIsolation(){
-  for(const [serial,model] of partRoots)model.visible=!isolate || serial===selectedSerial;
+  for(const [serial,model] of partRoots)model.visible=!isolate||serial===selectedSerial;
+  const current=labNodeList(machine).find(n=>n.serial===selectedSerial);
+  const def=BY_ID.get(current?.definitionId);
+  for(const actuator of actuators){
+    actuator.group.visible=actuator.group.visible&&
+      (!isolate||(def?.assemblyRole==='anatomy'&&def.side===actuator.side));
+  }
   markerGroup.visible=!isolate&&socketToggle.checked&&Number(explode.value)<1;
   refreshSelection();
 }
@@ -478,21 +514,21 @@ function reframe(){
 }
 function rebuild(fit=true){
   const bounds=buildModels();
-  renderSlots();renderCatalog();showTree();renderInspection();
+  renderSlots();renderCatalog();showTree();renderInspection();renderPosePanel();
   const verdict=labInspection(machine);
   const nr=labNodeList(machine).length;
   const absent=LAB_SLOTS.filter(s=>!machine.installed[s]).length;
   const yard=verdict.mobility;
   stats.textContent=nr+' NODES · '+Math.round(verdict.machineCheck.massKg)+' KG'+
     (yard.legs?' · '+yard.legs+'/2 LEGS':'');
-  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 07 · ASSEMBLED':'STAGE 07 · INCOMPLETE';
+  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 08 · ARTICULATED':'STAGE 08 · INCOMPLETE';
   if(!verdict.valid)setMessage(verdict.graphCheck.errors.join(' | '),true);
   else if(!verdict.ready)setMessage(verdict.mobility.complete?
     'Structurally valid · not combat-ready in live rules':
     'Structurally valid · serviceable mobility incomplete',false);
   else setMessage('Assembly graph valid · '+nr+' nodes');
   if(bounds&&fit)reframe();
-  refreshSelection();
+  applyExplode();refreshSelection();
 }
 function updateCamera(){
   const cp=Math.cos(elevation);
