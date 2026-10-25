@@ -25,8 +25,16 @@ import {
   neutralGrounding,groundedTargets,applyGrounding,returnToManual,
   validateGrounding,solveGroundedRig,contactWalkFrame
 } from './constructionGroundedPose.js';
+import {
+  installDefaultDevices,installDevice,removeDevice,installedDevice,
+  deviceBinding,mechanismValidation,mechanismsForBlueprint,restoreMechanisms,
+  refreshDeviceTarget,reconnectDevices
+} from './constructionMechanisms.js';
+import {
+  jointLimitsFor,jointWorkingRange,actuatorStrokeCheck
+} from './constructionArticulation.js';
 
-export const LAB_BLUEPRINT_VERSION=7;
+export const LAB_BLUEPRINT_VERSION=8;
 export const LAB_SLOTS=Object.freeze([...SLOTS]);
 export const LAB_PARTS=Object.freeze([...BY_ID.values()]);
 export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'});
@@ -37,21 +45,25 @@ export function createLabMachine(){
     const result=restoreWholeLeg(machine,side);
     if(!result.ok)throw new Error('Could not assemble '+side+' leg: '+result.reason);
   }
+  installDefaultDevices(machine);
   return machine;
 }
 
 export function labInspection(assembly){
   const graph=assemblyGraph(assembly);
   const graphCheck=validateGraph(graph,assembly,BY_ID);
+  const mechanisms=mechanismValidation(assembly);
   const rawCheck=inspectAssembly(assembly);
   const legs=LEG_SIDES.filter(side=>installedLeg(assembly,side)).length;
   const mobility={legs,complete:anatomyReadiness(assembly)};
   const articulation=articulationReport(assembly);
   const machineCheck={...rawCheck,
     massKg:rigAnatomyMass(assembly,rawCheck.massKg),
-    ready:rawCheck.ready&&mobility.complete&&articulation.valid};
-  return {graph,graphCheck,machineCheck,mobility,articulation,
-    valid:graphCheck.valid&&articulation.errors.length===0,ready:machineCheck.ready};
+    ready:rawCheck.ready&&mobility.complete&&articulation.valid&&
+      (!yardLegSupported(assembly)||articulation.powered)};
+  return {graph,graphCheck,machineCheck,mobility,articulation,mechanisms,
+    valid:graphCheck.valid&&mechanisms.valid&&articulation.errors.length===0,
+    ready:machineCheck.ready};
 }
 
 /** Stage 02–05: slot swaps remain transactions through existing production rules.
@@ -83,6 +95,7 @@ export function labEquip(assembly,slot,definitionId){
     reinstateLegs(assembly,
       slot==='mobility'&&definitionId==='legs-yard'&&!yardLegSupported(snapshot)
         ? {left:true,right:true} : previousLegs);
+    if(yardLegSupported(assembly))for(const side of LEG_SIDES)reconnectDevices(assembly,side);
     const final=labInspection(assembly);
     if(!final.valid)throw new Error(final.graphCheck.errors.join(' '));
     return {ok:true,assembly};
@@ -101,6 +114,7 @@ export function labSetGeneratorMount(assembly,position){
     const result=setGeneratorMount(assembly,position);
     if(!result.ok)throw new Error(result.reason);
     reinstateLegs(assembly,installed);
+    if(yardLegSupported(assembly))for(const side of LEG_SIDES)reconnectDevices(assembly,side);
     return {ok:true,position};
   }catch(error){
     Object.keys(assembly).forEach(key=>delete assembly[key]);
@@ -113,6 +127,7 @@ export function labLegAction(assembly,side,action){
   if(!['attach','detach'].includes(action))return {ok:false,reason:'Unknown leg action'};
   const snapshot=structuredClone(assembly);
   const result=action==='attach'?restoreWholeLeg(assembly,side):detachWholeLeg(assembly,side);
+  if(result.ok&&action==='attach')reconnectDevices(assembly,side);
   if(!result.ok || !labInspection(assembly).valid){
     Object.keys(assembly).forEach(key=>delete assembly[key]);
     Object.assign(assembly,snapshot);
@@ -129,8 +144,12 @@ export function labSectionAction(assembly,side,section,action,options={}){
     return {ok:false,reason:'Unknown anatomical section'};
   if(action==='detach')return detachAnatomyBranch(assembly,side,section,
     {cascade:!!options.cascade});
-  if(action==='attach')return installAnatomyBranch(assembly,side,section,
-    {variant:options.variant||'original'});
+  if(action==='attach'){
+    const result=installAnatomyBranch(assembly,side,section,
+      {variant:options.variant||'original'});
+    if(result.ok)reconnectDevices(assembly,side);
+    return result;
+  }
   if(action==='swap'){
     const snapshot=structuredClone(assembly);
     const wasGrounded=assembly.labGrounding?.mode==='grounded';
@@ -190,6 +209,29 @@ export function labPosePreset(assembly,name){
   assembly.labManualPose=structuredClone(assembly.labPose);
   return result;
 }
+export function labMechanismDetails(assembly){
+  return Object.fromEntries(LEG_SIDES.map(side=>[side,{
+    bearing:installedDevice(assembly,side,'bearing'),
+    actuator:installedDevice(assembly,side,'actuator'),
+    linkage:deviceBinding(assembly,side),
+    range:jointWorkingRange(assembly,side,'knee')
+  }]));
+}
+export function labMechanismAction(assembly,side,type,action,variant='plain'){
+  const original=structuredClone(assembly);
+  const result=action==='remove'?removeDevice(assembly,side,type):
+    action==='install'?installDevice(assembly,side,type,variant):
+    {ok:false,reason:'Unknown mechanism action'};
+  if(!result.ok)return result;
+  const mechanical=labInspection(assembly);
+  if(!mechanical.valid){
+    for(const k of Object.keys(assembly))delete assembly[k];
+    Object.assign(assembly,original);
+    return {ok:false,reason:mechanical.articulation.errors
+      .concat(mechanical.mechanisms.errors).join('; ')};
+  }
+  return result;
+}
 export function labPose(assembly){return currentPose(assembly);}
 export function labGrounding(assembly){return structuredClone(assembly.labGrounding||neutralGrounding());}
 /** A failed kinematic request is never silently clipped. When the user requests
@@ -197,7 +239,21 @@ export function labGrounding(assembly){return structuredClone(assembly.labGround
  * Its target remains an actual, shared world-space ankle reference.
  */
 export function labSolveGrounded(assembly,targets){
-  return solveGroundedRig(targets,{upperLowerForSide:side=>installedLimbGeometry(assembly,side)});
+  if(LEG_SIDES.some(side=>!installedDevice(assembly,side,'bearing')||
+    !deviceBinding(assembly,side)))return {ok:false,
+      reason:'Grounded powered movement requires both rotary bearings and connected linear actuators'};
+  return solveGroundedRig(targets,{
+    upperLowerForSide:side=>installedLimbGeometry(assembly,side),
+    limitsForSide:(side,joint)=>jointLimitsFor(assembly,side,joint),
+    validateCandidate:pose=>{
+      for(const side of LEG_SIDES){
+        const angle=pose[side+':knee'];
+        if(!actuatorStrokeCheck(side,angle,assembly).valid)return {ok:false,
+          reason:side+' actuator stroke prevents requested knee bend'};
+      }
+      return {ok:true};
+    }
+  });
 }
 /** The resting chassis datum belongs to the combined machine, not to
  * the shortest limb's original design. Search for the *minimal* shared body
@@ -340,10 +396,11 @@ export function labBlueprint(assembly){
     },
     pose:currentPose(assembly),
     grounding:labGrounding(assembly),
-    manualPose:structuredClone(assembly.labManualPose||currentPose(assembly))};
+    manualPose:structuredClone(assembly.labManualPose||currentPose(assembly)),
+    mechanisms:mechanismsForBlueprint(assembly)};
 }
 export function loadLabBlueprint(input){
-  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,5,6,LAB_BLUEPRINT_VERSION].includes(input.version)
+  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,5,6,7,LAB_BLUEPRINT_VERSION].includes(input.version)
     ||!input.stations||typeof input.stations!=='object'
     ||Object.keys(input.stations).some(k=>!LAB_SLOTS.includes(k)))
       throw new Error('Unsupported or invalid lab blueprint.');
@@ -395,8 +452,15 @@ export function loadLabBlueprint(input){
     }
     machine.labGrounding=structuredClone(input.grounding);
   }
+  if(input.version>=8){
+    const loaded=restoreMechanisms(machine,input.mechanisms);
+    if(!loaded.ok)throw new Error(loaded.reason);
+  }else if(yardLegSupported(machine)){
+    for(const side of LEG_SIDES)reconnectDevices(machine,side);
+  }
   const result=labInspection(machine);
-  if(!result.valid)throw new Error(result.graphCheck.errors.concat(result.articulation.errors).join(' '));
+  if(!result.valid)throw new Error(result.graphCheck.errors.concat(
+    result.articulation.errors,result.mechanisms.errors).join(' '));
   return machine;
 }
 export function labNodeList(assembly){
