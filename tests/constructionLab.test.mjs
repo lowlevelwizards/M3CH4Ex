@@ -688,3 +688,18 @@ test('Stage 10 actuator endpoints originate from the actual compatible link defi
  assert.deepEqual(second.linkage.targetLocal,shin.mechanical.driveAnchors.travel);
  assert.notDeepEqual(second.linkage.targetLocal,first.linkage.targetLocal);
 });
+
+test('Stage 10 removing a rotary bearing is distinct from removing a drive',()=>{
+ const rig=createLabMachine(),serial=labMechanismDetails(rig).right.bearing.serial;
+ const removed=labMechanismAction(rig,'right','bearing','remove');
+ assert.equal(removed.ok,true,removed.reason);
+ assert.equal(labInspection(rig).valid,true,'Structural frame remains valid');
+ assert.equal(labInspection(rig).ready,false,'Bearingless mechanism cannot drive a leg');
+ assert.equal(jointWorkingRange(rig,'right','knee').limiter,'rotary bearing absent');
+ assert.equal(labJointAction(rig,'right','knee',20).ok,false);
+ assert.equal(labAssistedPreset(rig,'crouch').ok,false);
+ const restored=labMechanismAction(rig,'right','bearing','install','plain');
+ assert.equal(restored.ok,true,restored.reason);
+ assert.equal(labMechanismDetails(rig).right.bearing.serial,serial);
+ assert.equal(labInspection(rig).ready,true);
+});
