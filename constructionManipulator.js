@@ -117,7 +117,10 @@ export function manipulatorDescription(assembly){
   ...s,bearing,actuator:drive,angle,range,
   linkage:{sourceSerial:upperSerial,sourceSocket:'drive-mount',
     targetSerial:lowerSerial,targetAnchor:'driveAnchors',
-    upperFromPivot:from,lowerFromPivot:anchor,lengthM}};
+    upperFromPivot:from,lowerFromPivot:anchor,
+    sourceLocal:upper?[...upper.position]:null,
+    targetLocal:anchor?[...anchor]:null,
+    stroke:drive?.stroke?{...drive.stroke}:null,lengthM}};
 }
 export function installManipulator(assembly,{
  bearingVariant='plain',actuatorVariant='utility',serials={}
@@ -223,8 +226,9 @@ export function replaceManipulatorMechanism(assembly,type,variant){
   // New mechanical limits may exclude the previous pose. Return to neutral
   // rather than silently clipping or pretending its prior angle remains legal.
   if(!changed.valid){
-   const neutral=manipulatorJointAction(assembly,0);
-   if(!neutral.ok)throw Error(changed.errors.join('; '));
+   // A different installed rotor/stroke may invalidate the prior pose.
+   // Explicitly return to neutral and recheck the entire linked mechanism.
+   assembly.labJointAngles[assembly.labManipulator.bearingSerial]=0;
   }
   const after=manipulatorDescription(assembly);
   if(!after.valid)throw Error(after.errors.join('; '));
