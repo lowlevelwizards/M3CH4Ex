@@ -247,8 +247,9 @@ export function restoreManipulatorBlueprint(assembly,input){
    return {ok:false,reason:'Malformed manipulator blueprint'};
  if(!input.enabled)return {ok:true};
  const fields=['enabled','bracketSerial','upperSerial','bearingSerial','lowerSerial','actuatorSerial','angle'];
- if(Object.keys(input).sort().join(',')!==fields.sort().join(',')||
-   fields.slice(1,-1).some(field=>typeof input[field]!=='string'))
+ if(Object.keys(input).sort().join(',')!==[...fields].sort().join(',')||
+   ['bracketSerial','upperSerial','bearingSerial','lowerSerial','actuatorSerial']
+     .some(field=>typeof input[field]!=='string')||!Number.isFinite(input.angle))
     return {ok:false,reason:'Invalid manipulator identity fields'};
  const bearing=owner(assembly,input.bearingSerial),drive=owner(assembly,input.actuatorSerial);
  const b=BY_ID.get(bearing?.definitionId),d=BY_ID.get(drive?.definitionId);
