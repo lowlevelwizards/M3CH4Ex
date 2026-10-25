@@ -238,8 +238,10 @@ export function restoreMechanisms(assembly,input){
     }
    }
    const shin=installedSection(assembly,side,'shin');
-   if(spec.actuator!=null&&spec.targetSerial!==shin?.serial)
+   if(spec.actuator!=null&&shin&&spec.targetSerial!==shin.serial)
      throw Error('Second endpoint must match installed shin serial');
+   if(spec.actuator!=null&&!shin&&spec.targetSerial!==null)
+     throw Error('Parked shin may not be used as an active linkage target');
    if(spec.actuator===null&&spec.targetSerial!==null)
      throw Error('Detached actuator must not claim a second endpoint');
    assembly.labMechanisms[side].targetSerial=spec.targetSerial;
