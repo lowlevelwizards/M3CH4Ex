@@ -3,6 +3,7 @@
  * This is not a replacement for the detailed M3CH4Ex lab or combat save format.
  */
 import {BY_ID} from './components.js';
+import {HOUSINGS,CARRIERS,STANCES,FEET,DEFAULT_FORM,normalizeForm,fromId} from './grayboxArchitecture.js';
 export const GB_VERSION=1;
 export const MANDATORY=Object.freeze(['frame','cab','combat','mobility','power']);
 const existing=(id,extra={})=>{
@@ -13,25 +14,27 @@ const existing=(id,extra={})=>{
 };
 export const FRAMES=Object.freeze([
  {id:'frame-sr',name:'BRUISER / Broad Industrial',mass:1580,capacity:5100,
-  size:[1.92,.84,1.42],shape:'broad',description:'Wide frame, generous side hardpoints, industrial gunfighter'},
+  size:[2.04,1.20,1.42],shape:'broad',description:'Tall wide crossmembers with deep internal equipment bay and side trunnions'},
  {id:'frame-utility',name:'SKELETON / Open Utility',mass:1290,capacity:4120,
-  size:[1.52,.88,1.28],shape:'open',description:'Narrow exposed spine, low mass, light modular tools'},
- {id:'frame-wedge',name:'WEDGE / Low Armored',mass:1450,capacity:4850,
-  size:[1.88,.64,1.65],shape:'wedge',description:'Low-slung protected nose, flush front cab, high hardpoint'},
+  size:[1.68,1.24,1.28],shape:'open',description:'Tall exposed cage with dual shoulder rails and open engine bays'},
+ {id:'frame-wedge',name:'CRADLE / Compact Tub',mass:1450,capacity:4850,
+  size:[1.42,.68,1.24],shape:'wedge',description:'Short understructure with forward and roof cab platforms'},
  {id:'frame-spire-gb',name:'SPAR / Tall Narrow',mass:1160,capacity:3900,
-  size:[1.20,1.23,1.14],shape:'tall',description:'Compact vertical carrier; slim weapon and sensor mounts'}
+  size:[1.20,1.46,1.14],shape:'tall',description:'Compact vertical carrier; slim weapon and sensor mounts'}
 ]);
 export const CABS=Object.freeze([
  {...existing('cab-utility'),name:'VISTA / Glazed Work Cab',form:'glass',positions:['cab-top','cab-front'],mass:295},
  {...existing('cab-cyclops'),name:'CYCLOPS / Optic Pilot Tub',form:'optic',positions:['cab-top','cab-front']},
- {...existing('cab-armored'),name:'HEARTH / Enclosed Pod',form:'armored',positions:['cab-front']},
+ {...existing('cab-armored'),name:'HEARTH / Integrated Cab',form:'armored',positions:['cab-front','cab-top']},
  {id:'cab-bubble-gb',name:'BUBBLE / Rounded Canopy',mass:325,draw:-12,form:'bubble',
-  positions:['cab-top'],source:'graybox'}
+  positions:['cab-top','cab-front'],source:'graybox'}
 ]);
 export const MOBILITY=Object.freeze([
  {...existing('legs-compact'),name:'KESTREL / Runner Pair',form:'runner'},
  {...existing('legs-yard'),name:'YARDWALKER / Work Pair',form:'work'},
  {...existing('legs-hauler'),name:'HAULER H2 / Heavy Pair',form:'heavy'},
+ {id:'mobility-low-gb',name:'STUBBER / Compact Industrial Pair',mass:1040,draw:-82,
+  form:'low',source:'graybox',experimental:true},
  {id:'mobility-quad-gb',name:'CRAWLER / Four-Point Rig',mass:1380,draw:-95,
   form:'quad',source:'graybox',experimental:true}
 ]);
@@ -49,6 +52,8 @@ export const POWER=Object.freeze([
 ]);
 export const SUPPORT=Object.freeze([
  {id:'support-arm',name:'UTILITY ARM / Service Manipulator',mass:120,draw:-16,form:'arm',roles:['side','roof']},
+ {id:'support-arm-light',name:'LIGHT ARM / Slim Carrier + Claw',mass:95,draw:-12,form:'arm-light',roles:['side','roof']},
+ {id:'support-arm-heavy',name:'HEAVY ARM / Industrial Carrier',mass:185,draw:-24,form:'arm-heavy',roles:['side','roof']},
  {id:'support-sensor',name:'OPTIC POD / Camera Cluster',mass:48,draw:-8,form:'sensor',roles:['side','roof','rear']},
  {id:'support-shield',name:'SHIELD / Impact Plate',mass:140,draw:0,form:'shield',roles:['side']},
  {id:'support-cooler',name:'COOLER / Exchanger',mass:105,draw:-6,form:'cooler',roles:['side','roof','rear']},
@@ -88,9 +93,9 @@ export function socketsForFrame(frameId){
  ];
  const allowed={
   'frame-sr':slots.map(x=>x.id),
-  'frame-utility':slots.map(x=>x.id).filter(x=>!['combat-top','power-inner'].includes(x)),
-  'frame-wedge':slots.map(x=>x.id).filter(x=>!['cab-top','support-roof'].includes(x)),
-  'frame-spire-gb':slots.map(x=>x.id).filter(x=>!['combat-left','power-inner','support-left'].includes(x))
+  'frame-utility':slots.map(x=>x.id).filter(x=>!['power-inner'].includes(x)),
+  'frame-wedge':slots.map(x=>x.id),
+  'frame-spire-gb':slots.map(x=>x.id).filter(x=>!['power-inner'].includes(x))
  };
  return slots.filter(x=>allowed[frameId].includes(x.id));
 }
@@ -118,7 +123,7 @@ export function defaultBuild(){
   installed:{cab:null,combat:null,mobility:null,power:null},
   support:{},armor:{frame:1,cab:1,mobility:1,combat:0},
   paint:{main:'#938b5e',secondary:'#475c56',accent:'#d69b4f'},
-  accentByAssembly:{}};
+  accentByAssembly:{},form:{...DEFAULT_FORM}};
  for(const [category,id,preferred] of [
   ['cab','cab-utility','cab-top'],['combat','gun-short','combat-right'],
   ['mobility','legs-yard','mobility-bottom'],['power','power-dynamo','power-rear']]){
@@ -131,7 +136,15 @@ export function emptyBuild(frame='frame-sr'){
  return {version:GB_VERSION,name:'UNTITLED RIG',frame,
   installed:{cab:null,combat:null,mobility:null,power:null},
   support:{},armor:{frame:0,cab:0,mobility:0,combat:0},
-  paint:{main:'#938b5e',secondary:'#475c56',accent:'#d69b4f'},accentByAssembly:{}};
+  paint:{main:'#938b5e',secondary:'#475c56',accent:'#d69b4f'},
+  accentByAssembly:{},form:{...DEFAULT_FORM}};
+}
+export function setForm(state,key,id){
+ if(!['housing','carrier','stance','feet'].includes(key))
+  return {ok:false,reason:'Unknown architectural selection'};
+ try{const update=normalizeForm({...state.form,[key]:id});
+  state.form=update;return {ok:true};}
+ catch(e){return {ok:false,reason:e.message};}
 }
 export function install(state,category,id,socketId=null){
  if(category==='frame')return changeFrame(state,id);
@@ -196,12 +209,14 @@ export function inspect(state){
  }
  const baseMass=all.reduce((sum,x)=>sum+x.mass,0);
  const armorMass=Object.values(state.armor).reduce((n,level)=>n+Number(level)*80,0);
- const totalMass=baseMass+armorMass;
+ const form=normalizeForm(state.form);
+ const housing=fromId(HOUSINGS,form.housing),carrier=fromId(CARRIERS,form.carrier);
+ const totalMass=baseMass+armorMass+housing.mass+carrier.mass;
  const available=all.find(x=>POWER.includes(x))?.draw||0;
- const consumption=-all.filter(x=>x.draw<0).reduce((n,x)=>n+x.draw,0);
+ const consumption=-all.filter(x=>x.draw<0).reduce((n,x)=>n+x.draw,0)-carrier.draw;
  if(totalMass>frame.capacity)issues.push('FRAME OVERLOAD: '+Math.round(totalMass-frame.capacity)+' kg');
  if(available<consumption)issues.push('POWER SHORTFALL: '+(consumption-available)+' kW');
- const experimental=state.installed.mobility?.id==='mobility-quad-gb';
+ const experimental=['mobility-quad-gb','mobility-low-gb'].includes(state.installed.mobility?.id);
  return {valid:issues.length===0,issues,mass:totalMass,capacity:frame.capacity,
   powerAvailable:available,powerDraw:consumption,
   experimental,complete:MANDATORY.every(k=>k==='frame'||!!state.installed[k])};
@@ -270,6 +285,7 @@ export function loadGraybox(input){
   if(!/^#[0-9a-f]{6}$/i.test(input.paint?.[key]))throw Error('Invalid paint '+key);
   x.paint[key]=input.paint[key];
  }
+ x.form=normalizeForm(input.form);
  x.accentByAssembly={};
  for(const [key,value] of Object.entries(input.accentByAssembly||{})){
   if(!['frame','cab','combat','mobility','power'].includes(key)&&
