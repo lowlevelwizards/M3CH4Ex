@@ -26,7 +26,10 @@ The root `index.html` is the white construction studio; it is not the combat gam
 - **Stage 08**: six independent manual joints with a tracked two-ended hydraulic actuator
 - **Stage 08D**: live-game two-link IK transplanted without combat dependencies; planted-foot crouch, committed single-foot lift and grounded two-step preview
 - **Stage 08D**: body translation coordinated with stationary support-foot world anchors; manual joint mode remains separate
-- **Stage 08D**: validated v5 JSON blueprints include foot targets, derived joint poses and manual mode; v1–v4 remain importable
+- **Stage 08D**: validated v5 JSON blueprints include foot targets, derived joint poses and manual mode
+- **Stage 08E**: component-authored shin spans and knee/ankle receivers; 160 mm longer Pylon L1 shin with distinct load-bearing geometry
+- **Stage 08E**: the unchanged graph and live IK automatically use each installed shin’s actual length; mixed configurations adapt grounded stance and shorter achievable poses without clipping joints
+- **Stage 08E**: construction viability reports connections, grounded stance, full crouch availability, step envelope, component dimensions, and *unverified* collision clearance; validated v6 blueprints preserve these builds
 - Isolate / explode previews, JSON blueprint export and import
 - Assembly and blueprint unit tests
 
@@ -47,7 +50,7 @@ Use a local HTTP server to preview ES modules, or GitHub Pages. There is no bund
 1. Open the lab and choose **MOBILITY**. The Stage 07 workbench exposes both legs and the one-click **Rook S2** shin swap.
 2. Open **ASSEMBLY** and tap a named shin node (or tap its mesh in the 3D scene). In **INSPECT**, replace the shin or detach it **with supported assemblies**.
 3. The detached original shin (and, where appropriate, its ankle and foot) remains in **OWNED / PARKED ASSEMBLIES**. Reinstall it later using its original serial.
-4. Use **EXPORT JSON** and **IMPORT JSON** to verify asymmetrical configurations. Version 1–4 blueprints remain importable; new exports use version 5.
+4. Use **EXPORT JSON** and **IMPORT JSON** to verify asymmetrical configurations. Version 1–5 blueprints remain importable; new exports use version 6.
 
 **Scope:** Stage 07 is a static assembly/geometry proof, not a mechanical gait solver. The alternate shin uses the same authored knee and ankle locations, and its 20 kg mass reduction is represented in the lab's derived assembly mass.
 
@@ -73,3 +76,13 @@ The purpose here is to reuse what already works in live M3CH4. The portable `liv
 5. Replace the left shin with **ROOK S2** in MOBILITY and repeat. The two shins currently share knee/ankle anchors, so the same IK solves both. Longer/shorter future shins will require their own interface geometry and reachable-target tests.
 
 The geometry tests confirm planted ankle Y/Z positions under crouch, one-foot steps, and the two-step walk. Full swept collisions, out-of-plane body shifting, propulsion, and load-driven balance are not simulated. Stance and swing timing follow the live design but are intentionally simplified for stationary laboratory demonstration.
+
+## Stage 08E — The first mechanically different leg
+
+1. Choose **MOBILITY** → left **PYLON L1 +160 MM**. The real ankle attachment socket is 160 mm below the stock knee-to-ankle span, and the original ankle and foot remain attached through the graph. The new shin is 135 kg (original 110 kg; Rook S2 90 kg).
+2. Open **POSE**. Check **CONSTRUCTION VIABILITY**: connections, two-foot grounding, achievable crouch, live two-step envelope, and actual left/right shin lengths. Accurate swept-mesh clearance and dynamic balance remain explicitly **unverified**.
+3. Try **NEUTRAL**, **PLANTED CROUCH**, **LIFT LEFT/RIGHT**. The solver uses the installed shin's measured endpoints. When a requested pose exceeds limits, the laboratory reports reduced motion instead of silently clipping or stretching geometry.
+4. Try the planted two-step test. Its stride and clearance are validated *once per configured machine*, then the same contact trajectory is used for the whole motion.
+5. Install Pylon on the opposite side, or mix Pylon with Rook and Yardwalker. Export and import the v6 blueprint and check that each shin's geometry and the foot targets remain intact.
+
+**Design boundary:** Our first Pylon is longer, not wider and not a new locomotion topology. Only the current Yardwalker two-leg layout is solved. Manufacturer standards, actuator force, full collision volumes, dynamic balance, paint and additional limb arrangements will be separate causal stages; this pass is not Stage 09–12.
