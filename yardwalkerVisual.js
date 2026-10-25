@@ -28,9 +28,14 @@ export function buildYardwalkerVisual(fixture,layout=YARDWALKER_LAYOUT){
         const side=leg.side,word=side<0?'left':'right';
         // A moderate load block and visible bearing: recognizably conventional,
         // but nowhere near the volume of Hauler's fixed suspension pods.
-        chamferBlock(carriage,`Y3-${word}-square-hip-load-block`,
-            [side*.645,.525,.08],[.35,.34,.34],.105,'olive');
-        const hip=groupAt(carriage,`${word}Hip`,leg.hip);
+        // The entire original leg is a removable assembly. This group owns
+        // every mesh below its authored hip socket, including its load block.
+        // Its local origin is exactly YARDWALKER_LAYOUT.legs[].hip.
+        const legRoot=groupAt(carriage,`yard-leg-${word}`,leg.hip);
+        legRoot.userData={assemblySide:word,assemblyType:'yardwalker-leg'};
+        chamferBlock(legRoot,`Y3-${word}-square-hip-load-block`,
+            sub([side*.645,.525,.08],leg.hip),[.35,.34,.34],.105,'olive');
+        const hip=groupAt(legRoot,`${word}Hip`,[0,0,0]);
         bearing(hip,`Y3-${word}-visible-hip-bearing`,[0,0,0],
             layout.hip.radius,layout.hip.width,side,'teal');
         const kneeOffset=sub(leg.knee,leg.hip);
@@ -85,6 +90,19 @@ export function buildYardwalkerVisual(fixture,layout=YARDWALKER_LAYOUT){
         foot.userData={joint:'foot',side};
     }
     return finishMobilityVisual(root,fixture,layout);
+}
+/** Extract the actual authored leg subtree without generating replacement art.
+ * The returned object is hip-local and belongs to a separate graph node.
+ * The shared carriage remains intact and contains no orphan limb geometry.
+ */
+export function extractYardwalkerLeg(root,side){
+    if(!['left','right'].includes(side))throw new Error('Unknown leg side');
+    const group=root.getObjectByName(`yard-leg-${side}`);
+    if(!group||!group.parent)throw new Error('Yardwalker '+side+' leg geometry is missing');
+    group.parent.remove(group);
+    group.position.set(0,0,0);
+    group.rotation.set(0,0,0);
+    return group;
 }
 /** Unrated fixed guides, never second independent mounting sockets. */
 export function buildYardwalkerGuideVisuals(plan){
