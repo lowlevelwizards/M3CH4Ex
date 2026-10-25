@@ -1,7 +1,9 @@
 import {createLabMachine,labJointAction,labSectionAction,labInspection,labSectionDetails,
-  labAssistedPreset,labGrounding,labGuidedWalkFrame,labMotionEnvelope} from '../constructionLabCore.js';
+  labAssistedPreset,labGrounding,labGuidedWalkFrame,labMotionEnvelope,
+  labMechanismAction,labMechanismDetails} from '../constructionLabCore.js';
 import {BY_ID,graphWorldPoses} from '../components.js';
-import {calculateArticulatedMatrices,createActiveActuator,updateActiveActuator} from '../constructionArticulationVisual.js';
+import {calculateArticulatedMatrices,createActiveActuator,updateActiveActuator,
+  createRotaryBearingVisual} from '../constructionArticulationVisual.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -331,4 +333,48 @@ test('Stage 09 mixed-component stance grounds soles with unlike thigh/shin/foot 
   }
   const body=labGrounding(rig).bodyDropM;
   assert.ok(Number.isFinite(body));
+});
+
+test('Stage 10 portable rotary bearings have different real machined envelope sizes',()=>{
+ const utility=BY_ID.get('mechanism-bearing-plain');
+ const reinforced=BY_ID.get('mechanism-bearing-wide');
+ assert.equal(utility.mountInterface.kind,reinforced.mountInterface.kind);
+ assert.equal(utility.mountInterface.standard,reinforced.mountInterface.standard);
+ const stock=createRotaryBearingVisual(utility),wide=createRotaryBearingVisual(reinforced);
+ const a=boundsOf(stock),b=boundsOf(wide);
+ assert.ok((b.max.y-b.min.y)>(a.max.y-a.min.y)+.07);
+ assert.ok(stock.children.length>=4&&wide.children.length>=4);
+ assert.equal(stock.userData.mechanicalAxis,'x');
+});
+test('Stage 10 active installed cylinder has physical alternate envelope and anchor motion',()=>{
+ const rig=createLabMachine();
+ assert.equal(labMechanismAction(rig,'left','bearing','install','wide').ok,true);
+ assert.equal(labMechanismAction(rig,'left','actuator','install','travel').ok,true);
+ const device=labMechanismDetails(rig).left.actuator;
+ const actuator=createActiveActuator('left',device.definition);
+ const resting=activeGeometry(rig);
+ const neutral=updateActiveActuator(actuator,rig,resting.matrix,resting.graph,resting.poses);
+ assert.equal(neutral.valid,true);
+ assert.equal(neutral.deviceSerial,device.serial);
+ assert.ok(Math.abs(actuator.housing.scale.y-.28)<1e-6);
+ assert.equal(labJointAction(rig,'left','knee',115).ok,true);
+ const flexed=activeGeometry(rig);
+ const moved=updateActiveActuator(actuator,rig,flexed.matrix,flexed.graph,flexed.poses);
+ assert.equal(moved.valid,true);
+ assert.ok(Math.abs(moved.lengthM-neutral.lengthM)>.12);
+ assert.ok(Math.abs(actuator.upperCap.position.distanceTo(actuator.lowerCap.position)-
+   moved.lengthM)<1e-7);
+ assert.equal(labMechanismAction(rig,'left','actuator','remove').ok,true);
+ const removed=activeGeometry(rig);
+ assert.equal(updateActiveActuator(actuator,rig,removed.matrix,removed.graph,removed.poses).visible,false);
+});
+test('Stage 10 two structural port parentages never duplicate a drive when it spans moving assemblies',()=>{
+ const rig=createLabMachine(),mechanical=labMechanismDetails(rig).left,
+  graph=labInspection(rig).graph;
+ assert.equal(graph.nodes[mechanical.actuator.serial].parentSerial,
+   labSectionDetails(rig)[0].sections.thigh.serial);
+ assert.equal(mechanical.linkage.targetSerial,
+   labSectionDetails(rig)[0].sections.shin.serial);
+ assert.equal(graph.nodes[mechanical.actuator.serial].parentSocket,'drive-mount');
+ assert.equal(Object.values(graph.nodes).filter(n=>n.serial===mechanical.actuator.serial).length,1);
 });
