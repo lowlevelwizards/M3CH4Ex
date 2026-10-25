@@ -174,6 +174,27 @@ export function updateActiveActuator(actuator,assembly,cache,graph,poseMap){
     valid:length>=stroke.min-.001&&length<=stroke.max+.001,
     deviceSerial:device.serial};
 }
+/** Reusable physical actuator visualization. No sides or anatomical names:
+ * one graph parent (source) and one independently referenced moving endpoint.
+ */
+export function updateLinkedActuator(actuator,binding,cache){
+  const {group,housing,rod,upperCap,lowerCap}=actuator;
+  if(!binding?.sourceSerial||!binding.targetSerial||
+     !cache.has(binding.sourceSerial)||!cache.has(binding.targetSerial)){
+    group.visible=false;return {visible:false};
+  }
+  const from=point(binding.sourceLocal).applyMatrix4(cache.get(binding.sourceSerial).matrix);
+  const to=point(binding.targetLocal).applyMatrix4(cache.get(binding.targetSerial).matrix);
+  const line=to.clone().sub(from),length=line.length(),spec=binding.stroke;
+  if(!spec||length<.005){group.visible=false;return {visible:false};}
+  const houseEnd=from.clone().addScaledVector(line,Math.min(1,spec.housing/length));
+  placeSegment(housing,from,houseEnd);
+  placeSegment(rod,houseEnd,to);
+  upperCap.position.copy(from);lowerCap.position.copy(to);
+  group.visible=true;
+  return {visible:true,lengthM:length,
+    extensionM:length-spec.housing,valid:length>=spec.min-.001&&length<=spec.max+.001};
+}
 /** Coarse broad-phase only. Joint contact volumes deliberately overlap,
  * so check the foot against the upper thigh, not two adjacent bearing sections.
  */
