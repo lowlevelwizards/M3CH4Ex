@@ -13,6 +13,7 @@ export const PYLON_SHIN_KG=135;
 export const PYLON_EXTENSION_M=.16;
 export const FORGE_THIGH_SHORTEN_M=.075;
 export const DOCKPAD_EXTRA_SOLE_M=.04;
+export const SHIN_VARIANTS=Object.freeze(['original','rook','extended']);
 export const THIGH_VARIANTS=Object.freeze(['original','compact']);
 export const FOOT_VARIANTS=Object.freeze(['original','stabilizer']);
 export const SECTION_VARIANTS=Object.freeze({
@@ -22,7 +23,6 @@ export const SECTION_VARIANTS=Object.freeze({
 /** Structural joint coordinates are owned by the *installed component*.
  * Both game visualization and grounded IK use these same definitions.
  */
-export const SHIN_VARIANTS=Object.freeze(['original','rook','extended']);
 export const ANATOMY_SOCKET=Object.freeze({hip:'hip-core',thigh:'thigh',knee:'knee',shin:'shin',ankle:'ankle',foot:'foot'});
 const offset=(a,b)=>a.map((x,i)=>x-b[i]);
 export const anatomyId=(side,section,variant='original')=>
