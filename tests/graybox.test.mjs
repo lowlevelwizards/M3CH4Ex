@@ -90,6 +90,7 @@ test('Ten references can be approximated entirely through reusable catalogue ent
  for(let i=0;i<10;i++){
   const rig=recipe(i),check=inspect(rig);
   assert.equal(check.complete,true,'reference '+i+': '+check.issues.join('; '));
+  assert.equal(check.valid,true,'reference '+i+' must be structurally and electrically valid: '+check.issues.join('; '));
   assert.ok(FRAMES.some(f=>f.id===rig.frame));
   for(const type of ['cab','combat','mobility','power'])
    assert.ok(validSockets({...rig,installed:{...rig.installed,[type]:null}},type,rig.installed[type].id)
