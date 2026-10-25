@@ -11,15 +11,19 @@ import { rotatedY } from './assemblyGraph.js';
 import { extractYardwalkerLeg, extractYardwalkerAnatomy, buildRookSparShin,
   buildPylonExtendedShin,buildForgeCompactThigh,buildDockpadStabilizerFoot
 } from './yardwalkerVisual.js';
-import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,PRESET_NAMES,articulationReport} from './constructionArticulation.js';
-import {applyArticulatedModels,createActiveActuator,updateActiveActuator,coarseClearanceHints} from './constructionArticulationVisual.js';
+import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,PRESET_NAMES,
+  articulationReport,jointWorkingRange
+} from './constructionArticulation.js';
+import {applyArticulatedModels,createActiveActuator,createRotaryBearingVisual,
+  updateActiveActuator,coarseClearanceHints} from './constructionArticulationVisual.js';
+import {installedDevice,deviceBinding,DEVICE_OPTIONS} from './constructionMechanisms.js';
 import {
   createLabMachine, labInspection, labEquip, labSetGeneratorMount, labBlueprint,
   loadLabBlueprint, labNodeList, labLegAction, labLegDetails,
   labSectionAction, labSectionDetails, labStowed,
   labJointAction,labPosePreset,labPose,
   labGrounding,labAssistedPreset,labGuidedWalkFrame,labReturnManual,
-  labViability,labMotionEnvelope,LAB_SLOTS
+  labViability,labMotionEnvelope,labMechanismDetails,labMechanismAction,LAB_SLOTS
 } from './constructionLabCore.js';
 
 const $=id=>document.getElementById(id);
@@ -126,6 +130,27 @@ function renderCatalog(){
         }
         wrap.append(row);
       }
+      if(leg.installed){
+        for(const [type,options] of [
+          ['bearing',[['plain','B-40 ROTARY'],['wide','B-62 WIDE']]],
+          ['actuator',[['utility','P-48 DRIVE'],['travel','P-70 TRAVEL']]]
+        ]){
+          const row=document.createElement('div');row.className='leg-variants';
+          const heading=document.createElement('strong');
+          heading.textContent=type==='bearing'?'ROTARY JOINT':'LINEAR DRIVE';
+          row.append(heading);
+          const current=labMechanismDetails(machine)[leg.side][type];
+          for(const [variant,label] of options){
+            const b=button((current?.definition.variant===variant?'✓ ':'')+label,()=>{
+              if(current?.definition.variant===variant)return;
+              doMechanismAction(leg.side,type,'install',variant);
+            });
+            b.disabled=current?.definition.variant===variant;row.append(b);
+          }
+          const remove=button('REMOVE',()=>doMechanismAction(leg.side,type,'remove'));
+          remove.disabled=!current;row.append(remove);wrap.append(row);
+        }
+      }
     }
     catalog.prepend(workbench);
   }
@@ -231,12 +256,24 @@ function doSectionAction(side,section,action,options={}){
   setMessage(side+' '+section+' '+(action==='swap'?'replaced':
     action==='detach'?'removed to owned tray':'installed')+' · assembly graph validated.');
 }
+function doMechanismAction(side,type,action,variant){
+  stopSweep(true);
+  const result=labMechanismAction(machine,side,type,action,variant);
+  if(!result.ok){setMessage(result.reason,true);return;}
+  const part=installedDevice(machine,side,type);
+  selectedSerial=part?.serial||machine.installed.mobility;
+  rebuild(false);switchTab('inspect');
+  setMessage(side.toUpperCase()+' '+type.toUpperCase()+' '+
+    (action==='remove'?'removed / unpowered':'mounted and tested')+
+    ' · hardware serials preserved');
+}
 function renderInspection(){
   inspect.replaceChildren();
   const node=labNodeList(machine).find(n=>n.serial===selectedSerial);
   const selectedLeg=labLegDetails(machine).find(l=>l.serial===selectedSerial);
   const selectedDef=node&&BY_ID.get(node.definitionId);
   const selectedSection=selectedDef?.assemblyRole==='anatomy'?selectedDef:null;
+  const selectedMechanism=selectedDef?.assemblyRole==='mechanism'?selectedDef:null;
   const card=document.createElement('section');card.className='card';
   const heading=document.createElement('h2');
   heading.textContent=node?.name||(selectedLeg?'Yardwalker '+selectedLeg.side+' leg · DETACHED':'SELECT A PART');
@@ -279,6 +316,32 @@ function renderInspection(){
       const note=document.createElement('p');note.className='meta';
       note.textContent='Owned part '+selectedLeg.serial+' remains in the detached tray. It is not rendered as attached geometry.';
       card.append(note);
+    }
+  }
+  if(selectedMechanism){
+    const type=selectedMechanism.device;
+    const side=ARTICULATION_SIDES.find(s=>
+      installedDevice(machine,s,type)?.serial===selectedSerial);
+    if(side){
+      const row=document.createElement('p');row.className='meta';
+      row.textContent='FUNCTION: '+selectedMechanism.mountInterface.kind+
+        ' · PORT: '+selectedMechanism.mountInterface.standard+
+        ' · NOT ANATOMY-SPECIFIC';
+      card.append(row);
+      if(type==='bearing'){
+        const lim=selectedMechanism.range;
+        const p=document.createElement('p');p.className='meta';
+        p.textContent='ROTOR RANGE '+lim.min+'° TO '+lim.max+'° / '+lim.axis;
+        card.append(p);
+      }else{
+        const stroke=selectedMechanism.stroke,p=document.createElement('p');p.className='meta';
+        p.textContent='STROKE LENGTH '+Math.round(stroke.min*1000)+
+          '–'+Math.round(stroke.max*1000)+' MM · THIGH TO SHIN';
+        card.append(p);
+      }
+      const b=button('REMOVE '+type.toUpperCase(),
+        ()=>doMechanismAction(side,type,'remove'));
+      b.style.width='100%';card.append(b);
     }
   }
   if(selectedSection){
@@ -375,7 +438,7 @@ function renderInspection(){
  * The hip drives the thigh branch, knee the shin branch and ankle the foot.
  */
 function jointControl(side,joint,container){
-  const limits=JOINT_LIMITS[joint];
+  const limits=jointWorkingRange(machine,side,joint);
   const card=document.createElement('div');card.className='joint-control';
   const heading=document.createElement('div');heading.className='metric';
   const title=document.createElement('strong'),value=document.createElement('strong');
@@ -399,7 +462,9 @@ function jointControl(side,joint,container){
   });
   card.append(slider);
   const note=document.createElement('p');note.className='meta';
-  note.textContent=limits.min+'° → '+limits.max+'° · '+limits.description;
+  note.textContent=limits.min+'° → '+limits.max+'° · '+
+    (joint==='knee'?'MECHANISM LIMIT: '+limits.limiter:
+      JOINT_LIMITS[joint].description);
   card.append(note);
   container.append(card);
 }
@@ -430,11 +495,19 @@ function updatePoseDiagnostics(){
       panel.append(p);
     }
   }
+  for(const range of report.range){
+    const p=document.createElement('p');p.className='meta';
+    p.textContent=range.side.toUpperCase()+' KNEE / '+
+      range.bearing+' · WORKING '+range.min+'° TO '+range.max+
+      '° · '+(range.powered?range.limiter:'UNPOWERED');
+    panel.append(p);
+  }
   for(const item of report.stroke){
     const line=document.createElement('div');line.className='metric';
     const a=document.createElement('span'),b=document.createElement('strong');
     a.textContent=item.side.toUpperCase()+' hydraulic stroke';
-    b.textContent=Math.round(item.extensionM*1000)+' mm · '+(item.valid?'IN RANGE':'OUT OF RANGE');
+    b.textContent=item.unpowered?'DISCONNECTED':
+      Math.round(item.extensionM*1000)+' mm · '+(item.valid?'IN RANGE':'OUT OF RANGE');
     b.style.color=item.valid?'#4e7c67':'#b44736';line.append(a,b);panel.append(line);
   }
   const note=document.createElement('p');note.className='meta';
@@ -679,10 +752,19 @@ function buildModels(){
       // The original fixed decorative piston cannot track a rotating knee.
       // Hide it and draw one continuous, two-ended dynamic actuator below.
       for(const side of ARTICULATION_SIDES){
+        if(installedDevice(machine,side,'bearing')){
+          const kneeGroup=anatomyVisuals[side].knee;
+          kneeGroup.getObjectByName('Y5-'+side+'-exposed-industrial-knee')?.parent?.remove(
+            kneeGroup.getObjectByName('Y5-'+side+'-exposed-industrial-knee'));
+          kneeGroup.getObjectByName('Y5-'+side+'-joint-orange-face')?.parent?.remove(
+            kneeGroup.getObjectByName('Y5-'+side+'-joint-orange-face'));
+        }
         const old=anatomyVisuals[side].thigh.getObjectByName(
           'Y6-'+side+'-practical-linear-drive');
         if(old)old.visible=false;
       }
+    } else if(def?.assemblyRole==='mechanism'){
+      model=def.device==='bearing'?createRotaryBearingVisual(def):new THREE.Group();
     } else if(def?.assemblyRole==='leg'){
       if(!yardwalkerLegVisuals?.[def.side])
         throw new Error('A leg cannot render without the owning Yardwalker carriage');
@@ -708,13 +790,14 @@ function buildModels(){
   });
   if(yardwalkerLegVisuals){
     for(const side of ARTICULATION_SIDES){
-      const actuator=createActiveActuator(side);
+      const device=installedDevice(machine,side,'actuator');
+      if(!device||!deviceBinding(machine,side))continue;
+      const actuator=createActiveActuator(side,device.definition);
       actuator.group.userData.mechanicalSide=side;
+      actuator.group.userData.labSerial=device.serial;
       partGroup.add(actuator.group);actuators.push(actuator);
-      const knee=nodes.find(n=>BY_ID.get(n.definitionId)?.assemblyRole==='anatomy'&&
-        BY_ID.get(n.definitionId)?.side===side&&BY_ID.get(n.definitionId)?.section==='knee');
-      if(knee)actuator.group.traverse(obj=>{
-        if(obj.isMesh){obj.userData.labSerial=knee.serial;rayTargets.push(obj);}
+      actuator.group.traverse(obj=>{
+        if(obj.isMesh){obj.userData.labSerial=device.serial;rayTargets.push(obj);}
       });
     }
   }
@@ -807,7 +890,7 @@ function rebuild(fit=true){
   const yard=verdict.mobility;
   stats.textContent=nr+' NODES · '+Math.round(verdict.machineCheck.massKg)+' KG'+
     (yard.legs?' · '+yard.legs+'/2 LEGS':'');
-  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 09 · MIXED PARTS':'STAGE 09 · INCOMPLETE';
+  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 10 · MECHANISMS':'STAGE 10 · INCOMPLETE';
   if(!verdict.valid)setMessage(verdict.graphCheck.errors.join(' | '),true);
   else if(!verdict.ready)setMessage(verdict.mobility.complete?
     'Structurally valid · not combat-ready in live rules':
