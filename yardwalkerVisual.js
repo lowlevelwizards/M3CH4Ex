@@ -156,6 +156,35 @@ export function buildRookSparShin(side,layout=YARDWALKER_LAYOUT){
         [mid[0],mid[1],mid[2]-.03],[.24,.13,.19],'teal');
     return root;
 }
+/** Pylon L1: extended service shin, 160 mm beyond the stock knee-to-ankle
+ * connection. Both visual load members terminate at the socket's actual anchor.
+ * Deliberately no invented knee, ankle, or foot assemblies in this geometry.
+ */
+export function buildPylonExtendedShin(side,ankleReceiver){
+    if(!['left','right'].includes(side))throw new Error('Invalid Pylon side');
+    if(!Array.isArray(ankleReceiver)||ankleReceiver.length!==3)
+        throw new Error('Pylon must receive mechanical knee-to-ankle geometry');
+    const root=new THREE.Group();
+    root.name='Pylon L1 / '+side+' extended-load shin';
+    root.userData={anatomicalSection:'shin',anatomicalSide:side,variant:'pylon-l1'};
+    const end=[...ankleReceiver];
+    for(const k of [-1,1]){
+        const x=k*.14;
+        taperedLink(root,`Pylon-${side}-${k}-longitudinal-load-spar`,
+            [x,0,0],[x+end[0],end[1],end[2]],.110,.075,.13,'charcoal');
+    }
+    taperedLink(root,`Pylon-${side}-telescoping-drive-carrier`,
+        [0,-.035,.025],[end[0],end[1]+.035,end[2]],.13,.095,.14,'iron');
+    disk(root,'Pylon-L1-knee-interface',[0,0,0],.16,.075,'iron','x');
+    disk(root,'Pylon-L1-ankle-interface',end,.135,.068,'iron','x');
+    const mid=end.map(v=>v*.45);
+    block(root,'Pylon-L1-broad-service-collar',
+        [mid[0],mid[1],mid[2]-.09],[.36,.19,.25],'olive');
+    const lower=end.map(v=>v*.78);
+    block(root,'Pylon-L1-lower-drive-cover',
+        [lower[0],lower[1],lower[2]-.055],[.31,.21,.19],'teal');
+    return root;
+}
 /** Unrated fixed guides, never second independent mounting sockets. */
 export function buildYardwalkerGuideVisuals(plan){
     if(!plan?.ok||plan.bridges.length!==2)throw new Error('Invalid Yardwalker guide bridge plan.');
