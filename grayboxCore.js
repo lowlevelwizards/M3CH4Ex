@@ -260,7 +260,7 @@ const variants=[
  ['05 / ROUNDED INDUSTRIAL','frame-spire-gb','cab-armored','legs-yard','gun-scatter','power-dynamo','combat-top',[['support-right','support-arm-light'],['cab-accessory-top','support-sensor']],'mustard','charcoal'],
  ['06 / WALKING CANNON','frame-wedge','cab-armored','mobility-low-gb','gun-cannon','power-forge','combat-top',[['weapon-shield','support-shield'],['support-left','support-arm-light']],'cream','slate'],
  ['07 / MAINTENANCE WALKER','frame-sr','cab-cyclops','legs-yard','gun-short','power-dynamo','combat-right',[['support-left','support-arm-heavy'],['support-rear','support-cooler']],'cream','safety'],
- ['08 / COMPACT SCOUT','frame-wedge','cab-cyclops','mobility-low-gb','gun-short','power-air','combat-right',[['support-right','support-arm-light'],['cab-accessory-top','support-sensor']],'white','rust'],
+ ['08 / COMPACT SCOUT','frame-wedge','cab-cyclops','mobility-low-gb','gun-short','power-dynamo','combat-right',[['support-right','support-arm-light'],['cab-accessory-top','support-sensor']],'white','rust'],
  ['09 / SCRAPYARD DERBY','frame-sr','cab-armored','legs-yard','gun-rivet','power-forge','combat-left',[['support-right','support-arm-heavy'],['support-rear','support-ammo']],'slate','red'],
  ['10 / WORKING CLASS','frame-utility','cab-cyclops','legs-yard','gun-scatter','power-dynamo','combat-right',[['support-left','support-arm-heavy'],['support-roof','support-cooler']],'rust','cream']
 ];
