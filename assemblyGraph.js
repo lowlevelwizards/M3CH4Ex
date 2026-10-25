@@ -196,6 +196,9 @@ export function validateGraph(graph, assembly, byId, { allowStaged = true } = {}
         if (!socket) { errors.push(`Socket ${node.parentSocket} is absent on ${node.parentSerial}.`); continue; }
         if (!MOUNT_SIZES.includes(socket.standard) || socket.standard !== def.mountSize)
             errors.push(`${def.name || key} requires ${def.mountSize}, but ${node.parentSocket} is ${socket.standard}.`);
+        if(socket.acceptsRole&&def.mountInterface?.kind&&
+          socket.acceptsRole!==def.mountInterface.kind)
+            errors.push(`${def.name || key} is ${def.mountInterface.kind}, not ${socket.acceptsRole}.`);
         if (!goodPoint(socket.position)) errors.push(`Invalid socket transform: ${node.parentSerial}/${socket.id}.`);
         if (socket.maxLoadKg && subtreeMass(graph, key, byId, new Set()) > socket.maxLoadKg)
             errors.push(`Socket ${node.parentSocket} on ${node.parentSerial} exceeds its ${socket.maxLoadKg} kg load rating.`);
@@ -256,6 +259,9 @@ export function proposeAttachment(assembly, byId, serial, parentSerial, socketId
     if (!socket) return { ok: false, reason: `Unknown socket ${socketId} on ${parentSerial}.` };
     if (socket.standard !== def?.mountSize)
         return { ok: false, reason: `${def?.name || serial} needs a ${def?.mountSize} mount, not ${socket.standard}.` };
+    if(socket.acceptsRole&&def?.mountInterface?.kind&&
+       socket.acceptsRole!==def.mountInterface.kind)
+        return {ok:false,reason:'Mechanical port requires '+socket.acceptsRole+', not '+def.mountInterface.kind};
     if (Object.values(old.nodes).some(n => n.parentSerial === parentSerial && n.parentSocket === socketId))
         return { ok: false, reason: `Socket ${socketId} on ${parentSerial} is occupied.` };
     const graph = clone(old);
