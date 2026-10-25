@@ -6,11 +6,14 @@ import {FRAMES,CATALOG,BY_PART,PAINTS,RECIPES,defaultBuild,validSockets,
  install,addSupport,removeSupport,changeFrame,inspect,recipe,
  loadGraybox,exportGraybox,socketsForFrame} from './grayboxCore.js';
 import {buildGrayboxScene} from './grayboxVisual.js';
+import {AUDIT_CATEGORIES,buildAuditScene,auditText} from './grayboxAudit.js';
 import {HOUSINGS,CARRIERS,STANCES,FEET,DEFAULT_FORM} from './grayboxArchitecture.js';
 import {setForm,setLimbPlating} from './grayboxCore.js';
 const $=id=>document.getElementById(id);
 const STORAGE='m3ch4-graybox-v1';
 let model,activeCategory='frame',pending=null,socketVisible=false,paintTarget='all';
+let currentTab='parts',auditCategory='frame',auditPart='frame-sr',
+ auditLevel=1,auditCompare=false;
 try{model=loadGraybox(JSON.parse(localStorage.getItem(STORAGE)||'null'));}
 catch{model=defaultBuild();}
 const stage=$('gb-viewport'),scene=new THREE.Scene();
@@ -79,8 +82,10 @@ function refreshStage(){
     material.dispose();
   }
  });}
- const result=buildGrayboxScene(model,{socketVisible,
-   highlightCategory:pending?.category,highlightPart:pending?.id});
+ const result=currentTab==='audit'?
+   buildAuditScene(auditCategory,auditPart,model.paint,auditLevel,auditCompare):
+   buildGrayboxScene(model,{socketVisible,
+     highlightCategory:pending?.category,highlightPart:pending?.id});
  body=result.root;liveSockets=result.sockets;
  scene.add(body);framePreview();
 }
@@ -337,14 +342,45 @@ function renderRecipes(){
  }
  root.append(list);
 }
+function renderAudit(){
+ const root=$('audit-controls');root.replaceChildren();
+ function picker(label,items,current,onChange){
+  const el=document.createElement('label');el.textContent=label;
+  const select=document.createElement('select');
+  for(const option of items){
+   const o=document.createElement('option');o.value=option.id;
+   o.textContent=option.name;select.append(o);
+  }
+  select.value=current;
+  select.addEventListener('change',()=>{
+   onChange(select.value);renderAudit();refreshStage();
+  });
+  el.append(select);root.append(el);
+ }
+ picker('Assembly family',AUDIT_CATEGORIES.map(id=>({
+  id,name:id.toUpperCase()})),auditCategory,id=>{
+   auditCategory=id;auditPart=CATALOG[id][0].id;
+ });
+ picker('Individual assembly',CATALOG[auditCategory],
+  auditPart,id=>{auditPart=id;});
+ if(!auditCompare)picker('Protective coverage',
+  [{id:'0',name:'BARE'},{id:'1',name:'ARMORED'},{id:'2',name:'ENCASED'}],
+  String(auditLevel),v=>{auditLevel=Number(v);});
+ root.append(button(auditCompare?'SHOW SINGLE ASSEMBLY':'COMPARE ALL 3 COVERAGE LEVELS',()=>{
+  auditCompare=!auditCompare;renderAudit();refreshStage();
+ }));
+ $('audit-notes').textContent=auditText(auditCategory,auditPart);
+}
 function renderPanels(){
- renderStations();renderChoices();renderAppearance();renderRecipes();buildAssessment();
+ renderStations();renderChoices();renderAppearance();renderRecipes();
+ renderAudit();buildAssessment();
 }
 for(const buttonEl of document.querySelectorAll('.tab')){
  buttonEl.addEventListener('click',()=>{
   for(const b of document.querySelectorAll('.tab'))b.classList.toggle('active',b===buttonEl);
-  for(const id of ['parts','looks','reference'])
-   $(id+'-panel').hidden=buttonEl.dataset.tab!==id;
+  currentTab=buttonEl.dataset.tab;
+  for(const id of ['parts','looks','reference','audit'])
+   $(id+'-panel').hidden=currentTab!==id;
   pending=null;refreshStage();buildAssessment();
  });
 }
