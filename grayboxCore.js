@@ -99,6 +99,19 @@ export function socketsForFrame(frameId){
  };
  return slots.filter(x=>allowed[frameId].includes(x.id));
 }
+/** Child sockets belong to installed assemblies, not just the central frame.
+ * They keep the same typed load/role vocabulary as frame ports.
+ */
+export function socketsForBuild(state){
+ const sockets=socketsForFrame(state.frame);
+ if(state.installed?.cab)
+  sockets.push({...S('cab-accessory-top','Cab equipment rail','support','roof',
+    [0,.48,0],95),parent:'cab',parentSocket:state.installed.cab.socket});
+ if(state.installed?.combat)
+  sockets.push({...S('weapon-shield','Weapon carrier protection','support','side',
+    [.25,0,-.20],175),parent:'combat',parentSocket:state.installed.combat.socket});
+ return sockets;
+}
 function categoryPart(category,id){return CATALOG[category]?.find(x=>x.id===id)||null;}
 export function fits(part,socket){
  if(!part||!socket)return false;
@@ -115,7 +128,7 @@ function used(state,socket,except){
 export function validSockets(state,category,id){
  const part=categoryPart(category,id);
  if(!part)return [];
- return socketsForFrame(state.frame).filter(s=>s.station===category&&
+ return socketsForBuild(state).filter(s=>s.station===category&&
   s.capacity>=part.mass&&fits(part,s)&&!used(state,s.id,category));
 }
 export function defaultBuild(){
@@ -194,14 +207,14 @@ export function inspect(state){
  for(const category of ['cab','combat','mobility','power']){
   const mounted=state.installed[category];
   if(!mounted){issues.push('Missing '+category.toUpperCase());continue;}
-  const p=categoryPart(category,mounted.id),s=socketsForFrame(frame.id).find(s=>s.id===mounted.socket);
+  const p=categoryPart(category,mounted.id),s=socketsForBuild(state).find(s=>s.id===mounted.socket);
   if(!p||!s||s.station!==category||!fits(p,s)||p.mass>s.capacity||occupied.has(s.id))
    issues.push('Invalid '+category+' socket or mount capacity');
   else occupied.add(s.id);
   if(p)all.push(p);
  }
  for(const [socket,id] of Object.entries(state.support)){
-  const p=categoryPart('support',id),s=socketsForFrame(frame.id).find(s=>s.id===socket);
+  const p=categoryPart('support',id),s=socketsForBuild(state).find(s=>s.id===socket);
   if(!p||!s||s.station!=='support'||!fits(p,s)||p.mass>s.capacity||occupied.has(socket))
    issues.push('Invalid auxiliary mount at '+socket);
   else occupied.add(socket);
@@ -308,7 +321,7 @@ export function loadGraybox(input){
  x.accentByAssembly={};
  for(const [key,value] of Object.entries(input.accentByAssembly||{})){
   if(!['frame','cab','combat','mobility','power'].includes(key)&&
-     !socketsForFrame(x.frame).some(s=>s.id===key))throw Error('Unknown paint target');
+     !socketsForBuild(x).some(s=>s.id===key))throw Error('Unknown paint target');
   if(!/^#[0-9a-f]{6}$/i.test(value))throw Error('Invalid subassembly color');
   x.accentByAssembly[key]=value;
  }
