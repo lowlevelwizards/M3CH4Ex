@@ -112,7 +112,7 @@ export function createConstructorYard({scene,camera,stage,onMessage,onGarage}){
  let rig=null,parts=[],joints=[],weaponId=null,pilot=initialYardPilot(),mode='garage',
   lookPointer=null,lastX=0,lastY=0,pitch=.06,shots=0,hits=0,cooldown=0;
  let joystickPointer=null;
- const cameras=['CHASE','CAB'];let cameraMode=0;
+ const cameras=['CHASE','FORWARD'];let cameraMode=0;
  const status=message=>{
   if(info)info.textContent=message;
   onMessage?.(message);
@@ -167,8 +167,8 @@ export function createConstructorYard({scene,camera,stage,onMessage,onGarage}){
   if(mode!=='pilot'||!rig)return;
   const height=new THREE.Box3().setFromObject(rig,true).getSize(new THREE.Vector3()).y;
   const yaw=pilot.yaw;
-  // CAB view uses the actual chassis/cab heading; chase view lets the
-  // player inspect the complete built assembly under locomotion.
+  // Forward view clears the canopy while preserving the rig in the scene;
+  // chase view lets the player inspect all installed parts under locomotion.
   if(cameraMode===0){
    const target=new THREE.Vector3(pilot.x+Math.sin(yaw)*7.4,
     Math.max(4.2,height+1.25)+pitch*3.5,pilot.z+Math.cos(yaw)*7.4);
@@ -176,9 +176,9 @@ export function createConstructorYard({scene,camera,stage,onMessage,onGarage}){
    else camera.position.lerp(target,.22);
    camera.lookAt(pilot.x,Math.max(1.25,height*.63)+pitch*5,pilot.z-1.6);
   }else{
-   // Camera at the cab's location. Hide ONLY the locally obstructing canopy
-   // via near-clipping; the assembled mech remains the same live scene rig.
-   const head=new THREE.Vector3(0,Math.max(1.5,height*.67),-.37)
+   // Forward sightline just ahead of the operator enclosure, not an
+   // artificially simulated cockpit. No mesh or installed part is hidden.
+   const head=new THREE.Vector3(0,Math.max(2.1,height*.88),-1.20)
     .applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
    camera.position.set(pilot.x+head.x,head.y,pilot.z+head.z);
    const direction=new THREE.Vector3(-Math.sin(yaw),pitch,-Math.cos(yaw));
