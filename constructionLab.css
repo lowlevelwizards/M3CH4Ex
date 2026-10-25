@@ -43,3 +43,14 @@ aside{display:flex;flex-direction:column;width:min(340px,34vw);min-height:0;back
  .leg-variants button{min-height:38px}
  .leg-builder summary{min-height:44px}
 }
+
+/* Stage 11 — fifth navigation tab and long function-first mechanism names. */
+.tabbar button[data-tab="manip"]{flex:1.6;font-size:9px;letter-spacing:.01em}
+#manip-controls .card{display:flex;flex-direction:column;gap:8px}
+#manip-controls .metric{gap:10px}
+#manip-controls .metric strong{text-align:right;overflow-wrap:anywhere;max-width:55%}
+#manip-controls .leg-variants strong{min-width:55px}
+@media(max-width:730px){
+ .tabbar button[data-tab="manip"]{font-size:8px;min-height:38px}
+ #manip-controls button{min-height:39px}
+}
