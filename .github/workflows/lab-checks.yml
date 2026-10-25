@@ -25,3 +25,7 @@ jobs:
           while IFS= read -r file; do node --check "$file"; done < <(find . -name '*.js' -o -name '*.mjs' | sort)
       - name: Run construction tests
         run: npm test
+      - name: Install pinned Three.js for model geometry checks
+        run: npm install --no-save --no-package-lock --ignore-scripts three@0.186.0
+      - name: Verify original Yardwalker meshes survive independent leg extraction
+        run: node --test tests/constructionLegGeometry.geometry.mjs
