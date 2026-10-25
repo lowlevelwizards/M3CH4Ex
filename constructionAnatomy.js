@@ -5,6 +5,7 @@
 import {CATALOG,BY_ID,assemblyGraph,proposeAttachment,proposeRemoval,validateGraph} from './components.js';
 import {LEG_SIDES,YARD_LEG_IDS,ownedLeg,yardLegSupported,YARD_LEG_KG} from './constructionLegs.js';
 import {YARDWALKER_LAYOUT} from './mobilityDefinitions.js';
+import {proposeComponentReplacement} from './assemblyGraph.js';
 
 export const ANATOMY_ORDER=Object.freeze(['hip','thigh','knee','shin','ankle','foot']);
 export const ANATOMY_MASS=Object.freeze({hip:80,thigh:140,knee:65,shin:110,ankle:45,foot:60});
@@ -278,37 +279,34 @@ export function installAnatomyBranch(assembly,side,section,{variant='original'}=
     return {side,section,serial:part.serial};
   });
 }
-/** Atomic true part substitution; the original ankle+foot remain installed.
- * A queued alternative with descendants must be disassembled first.
+/** Generic service-part swap: same replacement primitive for thigh, shin,
+ * foot or any future typed interface. Unsupported descendants must explicitly
+ * be removed first, rather than teleporting or orphaning them.
  */
-export function swapShin(assembly,side,variant='rook'){
-  if(!LEG_SIDES.includes(side)||!SHIN_VARIANTS.includes(variant))
-    return {ok:false,reason:'Unsupported side or shin'};
+export function replaceAnatomyComponent(assembly,side,section,variant){
+  if(!LEG_SIDES.includes(side)||!ANATOMY_ORDER.includes(section)||
+     !SECTION_VARIANTS[section]?.includes(variant))
+    return {ok:false,reason:'Unknown replacement side, section or variant'};
   return transaction(assembly,()=>{
-    const old=activeNode(assembly,side,'shin');
-    const next=ownedFor(assembly,anatomyId(side,'shin',variant));
-    if(!next)throw new Error('Alternate shin not owned');
-    if(old?.serial===next.serial)return {unchanged:true};
-    if(assemblyGraph(assembly).nodes[next.serial])throw new Error('Shin already attached elsewhere');
+    const old=activeNode(assembly,side,section);
+    if(!old)throw Error('Install the '+section+' before replacing it');
+    const next=ownedFor(assembly,anatomyId(side,section,variant));
+    if(!next)throw Error('No owned replacement component');
+    if(next.serial===old.serial)return {unchanged:true,side,section,variant};
     if(assembly.labStowed?.[next.serial]?.length>1)
-      throw new Error('Target shin has its own stored ankle/foot. Reinstall or disassemble them first.');
-    const knee=activeNode(assembly,side,'knee');
-    if(!knee)throw new Error('Install a knee before a shin');
-    const graph=structuredClone(assemblyGraph(assembly));
-    if(old){
-      const dependents=Object.values(graph.nodes).filter(n=>n.parentSerial===old.serial);
-      for(const dependent of dependents)dependent.parentSerial=next.serial;
-      delete graph.nodes[old.serial];
-      stow(assembly,old.serial,[old]);
-    }
-    graph.nodes[next.serial]={serial:next.serial,definitionId:next.definitionId,
-      parentSerial:knee.serial,parentSocket:'shin',rotationQuarterTurns:0};
-    delete assembly.labStowed?.[next.serial];
-    const report=validateGraph(graph,assembly,BY_ID);
-    if(!report.valid)throw new Error(report.errors.join('; '));
-    assembly.graph=graph;
-    return {side,variant,serial:next.serial,replaced:old?.serial||null};
+      throw Error('Replacement carries stored descendants. Reinstall or disassemble that branch first.');
+    const proposal=proposeComponentReplacement(assembly,BY_ID,old.serial,next.serial);
+    if(!proposal.ok)throw Error(proposal.reason);
+    stow(assembly,old.serial,[old]);
+    if(assembly.labStowed)delete assembly.labStowed[next.serial];
+    assembly.graph=proposal.graph;
+    return {side,section,variant,serial:next.serial,
+      replaced:old.serial,retainedDescendants:proposal.retainedDescendants};
   });
+}
+/** Backwards-compatible stage-08 API, now delegating to the generic swap. */
+export function swapShin(assembly,side,variant='rook'){
+  return replaceAnatomyComponent(assembly,side,'shin',variant);
 }
 /** Entire attached leg + its own section graph can be stowed and reinstalled
  * intact. This deliberately supersedes Stage 06's flat leg-node removal.
