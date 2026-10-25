@@ -8,10 +8,11 @@ import { SHARED_PART_IDS, buildPartVisual } from './partVisuals.js';
 import { buildFitFixture } from './chassisFitVisuals.js';
 import { fitFixtureFor } from './chassisFitFixtures.js';
 import { rotatedY } from './assemblyGraph.js';
-import { extractYardwalkerLeg } from './yardwalkerVisual.js';
+import { extractYardwalkerLeg, extractYardwalkerAnatomy, buildRookSparShin } from './yardwalkerVisual.js';
 import {
   createLabMachine, labInspection, labEquip, labSetGeneratorMount, labBlueprint,
-  loadLabBlueprint, labNodeList, labLegAction, labLegDetails, LAB_SLOTS
+  loadLabBlueprint, labNodeList, labLegAction, labLegDetails,
+  labSectionAction, labSectionDetails, labStowed, LAB_SLOTS
 } from './constructionLabCore.js';
 
 const $=id=>document.getElementById(id);
@@ -297,7 +298,7 @@ function buildModels(){
   if(!frameDef){setMessage('Missing structural frame.',true);return;}
   nodeWorldPoses=graphWorldPoses(graph,BY_ID,frameDef.center);
   const nodes=labNodeList(machine);
-  let yardwalkerLegVisuals=null;
+  let yardwalkerLegVisuals=null,anatomyVisuals=null;
   nodes.forEach(node=>{
     const pose=nodeWorldPoses.get(node.serial);if(!pose)return;
     const def=BY_ID.get(node.definitionId);
@@ -310,10 +311,21 @@ function buildModels(){
         left:extractYardwalkerLeg(model,'left'),
         right:extractYardwalkerLeg(model,'right')
       };
+      anatomyVisuals={
+        left:extractYardwalkerAnatomy(yardwalkerLegVisuals.left,'left'),
+        right:extractYardwalkerAnatomy(yardwalkerLegVisuals.right,'right')
+      };
     } else if(def?.assemblyRole==='leg'){
       if(!yardwalkerLegVisuals?.[def.side])
         throw new Error('A leg cannot render without the owning Yardwalker carriage');
       model=yardwalkerLegVisuals[def.side];
+    } else if(def?.assemblyRole==='anatomy'){
+      if(!anatomyVisuals?.[def.side])
+        throw new Error('No source Yardwalker anatomy available');
+      model=def.variant==='rook'
+        ?buildRookSparShin(def.side)
+        :anatomyVisuals[def.side][def.section];
+      if(!model)throw new Error('Missing original '+def.side+' '+def.section+' geometry');
     } else model=def?makeVisual(def):makeAdapterVisual(node);
     model.name='lab:'+node.serial;
     model.userData.labSerial=node.serial;
@@ -388,11 +400,11 @@ function rebuild(fit=true){
   const yard=verdict.mobility;
   stats.textContent=nr+' NODES · '+Math.round(verdict.machineCheck.massKg)+' KG'+
     (yard.legs?' · '+yard.legs+'/2 LEGS':'');
-  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 06 · ASSEMBLED':'STAGE 06 · INCOMPLETE';
+  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 07 · ASSEMBLED':'STAGE 07 · INCOMPLETE';
   if(!verdict.valid)setMessage(verdict.graphCheck.errors.join(' | '),true);
   else if(!verdict.ready)setMessage(verdict.mobility.complete?
     'Structurally valid · not combat-ready in live rules':
-    'Structurally valid · detached leg: mobility incomplete',false);
+    'Structurally valid · serviceable mobility incomplete',false);
   else setMessage('Assembly graph valid · '+nr+' nodes');
   if(bounds&&fit)reframe();
   refreshSelection();
