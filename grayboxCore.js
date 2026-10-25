@@ -231,7 +231,13 @@ export function recipe(index){
   let valid=validSockets(s,'support',id),choose=valid.find(x=>x.id===socket)||valid[0];
   if(choose)addSupport(s,id,choose.id);
  }
- s.armor={frame:1,cab:2,mobility:1,combat:0};
+ // Authored protection tradeoffs: compact and overloaded frames deliberately
+ // expose structure rather than silently ignoring frame capacity constraints.
+ const coverage=[
+  [1,2,1,0],[1,2,1,0],[1,2,1,0],[0,2,1,0],[0,2,1,0],
+  [0,1,1,0],[1,2,1,0],[1,2,1,0],[1,2,1,0],[0,1,0,0]
+ ][index];
+ s.armor=Object.fromEntries(['frame','cab','mobility','combat'].map((k,i)=>[k,coverage[i]]));
  s.paint.main=PAINTS[primary];s.paint.secondary=PAINTS[secondary];
  s.paint.accent=PAINTS.mustard;
  return s;
