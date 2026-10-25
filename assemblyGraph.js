@@ -230,7 +230,11 @@ function subtreeMass(graph, id, byId, seen) {
     if (seen.has(id)) return Infinity;
     seen.add(id);
     const node = graph.nodes[id];
-    let mass = definition(node?.definitionId, byId)?.massKg || 0;
+    const def = definition(node?.definitionId, byId);
+    // Some old catalogue modules are inclusive *paired-assembly* weights.
+    // When those members become separate graph children, count the carriage
+    // once and add only physically installed children. Never double-count.
+    let mass = Math.max(0,(def?.massKg || 0)-(def?.includedChildMassKg || 0));
     for (const child of Object.values(graph.nodes).filter(n => n.parentSerial === id))
         mass += subtreeMass(graph, child.serial, byId, new Set(seen));
     return mass;
