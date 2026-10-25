@@ -12,7 +12,8 @@ import {
   labJointAction,labPosePreset,labPose,
   labAssistedPreset,labGuidedWalkFrame,labGrounding,labReturnManual,
   labViability,labMotionEnvelope,labSolveGrounded,
-  labMechanismDetails,labMechanismAction
+  labMechanismDetails,labMechanismAction,
+  labManipulatorDetails,labManipulatorAction,manipulatorPosePresets
 } from '../constructionLabCore.js';
 
 test('default lab rig is an authentic, graph-valid five-station machine',()=>{
@@ -205,7 +206,7 @@ test('Stage 07 blueprint roundtrip preserves mixed shins and stowed supported br
   assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
   assert.equal(labSectionAction(rig,'right','shin','detach',{cascade:true}).ok,true);
   const bp=labBlueprint(rig);
-  assert.equal(bp.version,8);
+  assert.equal(bp.version,9);
   const saved=JSON.stringify(bp);
   const restored=loadLabBlueprint(bp);
   assert.equal(JSON.stringify(labBlueprint(restored)),saved);
@@ -267,7 +268,7 @@ test('Stage 08 blueprint persists six mechanical degrees of freedom with v3 comp
   assert.equal(labJointAction(machine,'right','hip',-20).ok,true);
   assert.equal(labSectionAction(machine,'left','shin','swap',{variant:'rook'}).ok,true);
   const bp=labBlueprint(machine);
-  assert.equal(bp.version,8);
+  assert.equal(bp.version,9);
   const restored=loadLabBlueprint(bp);
   assert.deepEqual(labPose(restored),labPose(machine));
   assert.deepEqual(labBlueprint(restored),bp);
@@ -342,7 +343,7 @@ test('08D v5 blueprint stores foot targets and rejects mismatched joint data',()
   const result=labAssistedPreset(rig,'step-left');
   assert.equal(result.ok,true,result.reason);
   const blueprint=labBlueprint(rig);
-  assert.equal(blueprint.version,8);
+  assert.equal(blueprint.version,9);
   const imported=loadLabBlueprint(blueprint);
   assert.deepEqual(labBlueprint(imported),blueprint);
   const corrupted=structuredClone(blueprint);
@@ -411,7 +412,7 @@ test('08E Pylon can exchange sides, revert to stock geometry, and roundtrip blue
   assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'extended'}).ok,true);
   assert.equal(labSectionAction(rig,'right','shin','swap',{variant:'rook'}).ok,true);
   const first=labBlueprint(rig);
-  assert.equal(first.version,8);
+  assert.equal(first.version,9);
   const copy=loadLabBlueprint(first);
   assert.deepEqual(labBlueprint(copy),first);
   assert.equal(labSectionDetails(copy)[0].sections.shin.variant,'extended');
@@ -510,7 +511,7 @@ test('Stage 09 complete asymmetric thigh/shin/foot mix stands, crouches, steps a
     assert.equal(frame.ok,true,'step '+i+' '+frame.reason);
   }
   const blueprint=labBlueprint(rig);
-  assert.equal(blueprint.version,8);
+  assert.equal(blueprint.version,9);
   const loaded=loadLabBlueprint(blueprint);
   assert.deepEqual(labBlueprint(loaded),blueprint);
   assert.equal(labSectionDetails(loaded)[0].sections.foot.variant,'stabilizer');
@@ -613,7 +614,7 @@ test('Stage 10 version eight preserves independent bearing and drive identities'
  assert.equal(labMechanismAction(rig,'left','bearing','install','wide').ok,true);
  assert.equal(labMechanismAction(rig,'right','actuator','install','travel').ok,true);
  const bp=labBlueprint(rig);
- assert.equal(bp.version,8);
+ assert.equal(bp.version,9);
  const clone=loadLabBlueprint(bp);
  assert.deepEqual(labBlueprint(clone),bp);
  const bad=structuredClone(bp);
@@ -702,4 +703,117 @@ test('Stage 10 removing a rotary bearing is distinct from removing a drive',()=>
  assert.equal(restored.ok,true,restored.reason);
  assert.equal(labMechanismDetails(rig).right.bearing.serial,serial);
  assert.equal(labInspection(rig).ready,true);
+});
+
+test('Stage 11 assembles a separate industrial arm using the SAME B-40/P-48 IDs as legs',()=>{
+  const rig=createLabMachine(),leg=labMechanismDetails(rig).left;
+  const originalCount=labNodeList(rig).length;
+  const result=labManipulatorAction(rig,'install');
+  assert.equal(result.ok,true,result.reason);
+  const arm=labManipulatorDetails(rig);
+  assert.equal(arm.valid,true,arm.errors?.join('; '));
+  assert.equal(arm.attached,true);
+  assert.equal(arm.bearing.id,leg.bearing.definition.id);
+  assert.equal(arm.actuator.id,leg.actuator.definition.id);
+  assert.notEqual(arm.bearingSerial,leg.bearing.serial);
+  assert.notEqual(arm.actuatorSerial,leg.actuator.serial);
+  assert.equal(labNodeList(rig).length,originalCount+5);
+  assert.ok(arm.range.ok);
+  assert.equal(labInspection(rig).valid,true);
+  assert.equal(labInspection(rig).ready,true);
+});
+test('Stage 11 generic structural topology has exactly one parent per part and a separate double-ended actuator',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ const arm=labManipulatorDetails(rig),g=labInspection(rig).graph.nodes;
+ assert.equal(g[arm.bracketSerial].parentSerial,rig.installed.structure);
+ assert.equal(g[arm.upperSerial].parentSerial,arm.bracketSerial);
+ assert.equal(g[arm.bearingSerial].parentSerial,arm.upperSerial);
+ assert.equal(g[arm.lowerSerial].parentSerial,arm.bearingSerial);
+ assert.equal(g[arm.actuatorSerial].parentSerial,arm.upperSerial);
+ assert.equal(g[arm.actuatorSerial].parentSocket,'drive-mount');
+ assert.equal(arm.linkage.targetSerial,arm.lowerSerial);
+ assert.equal(g[arm.lowerSerial].parentSerial,arm.bearingSerial);
+ assert.equal(labInspection(rig).graphCheck.valid,true);
+});
+test('Stage 11 replacing the manipulator bearing and cylinder changes attainable movement',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ const original=labManipulatorDetails(rig),originalRange=original.range;
+ assert.equal(labManipulatorAction(rig,'bearing',{variant:'wide'}).ok,true);
+ const wider=labManipulatorDetails(rig);
+ assert.equal(wider.bearing.variant,'wide');
+ assert.equal(wider.actuator.id,original.actuator.id);
+ assert.equal(labManipulatorAction(rig,'actuator',{variant:'travel'}).ok,true);
+ const extended=labManipulatorDetails(rig);
+ assert.equal(extended.actuator.variant,'travel');
+ assert.ok(extended.range.max>originalRange.max+30);
+ assert.equal(extended.range.max,120);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:115}).ok,true);
+ assert.equal(labManipulatorDetails(rig).angle,115);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:150}).ok,false);
+ // Leg hardware still controls leg knee independently.
+ assert.equal(labMechanismDetails(rig).left.bearing.definition.variant,'plain');
+ assert.equal(labJointAction(rig,'left','knee',115).ok,false);
+});
+test('Stage 11 preserves installed arm pose when other leg limbs or weapon change',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:12}).ok,true);
+ const before=labManipulatorDetails(rig);
+ assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
+ assert.equal(labEquip(rig,'combat','gun-short').ok,true);
+ assert.equal(labManipulatorDetails(rig).angle,before.angle);
+ assert.equal(labManipulatorDetails(rig).bearingSerial,before.bearingSerial);
+ assert.equal(labInspection(rig).valid,true);
+});
+test('Stage 11 removing manipulator returns exact owned serials and protects the legacy legs',()=>{
+ const rig=createLabMachine();
+ const legs=labMechanismDetails(rig);
+ const original=labInspection(rig).machineCheck.massKg;
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ const arm=labManipulatorDetails(rig),added=labInspection(rig).machineCheck.massKg-original;
+ assert.equal(added,35+70+9+56+14);
+ const detached=labManipulatorAction(rig,'remove');
+ assert.equal(detached.ok,true,detached.reason);
+ assert.equal(labManipulatorDetails(rig).attached,false);
+ assert.equal(labInspection(rig).machineCheck.massKg,original);
+ for(const serial of [arm.bracketSerial,arm.upperSerial,arm.bearingSerial,
+   arm.lowerSerial,arm.actuatorSerial]){
+   assert.ok(rig.owned.some(x=>x.serial===serial));
+   assert.equal(labInspection(rig).graph.nodes[serial],undefined);
+ }
+ assert.equal(labMechanismDetails(rig).left.bearing.serial,legs.left.bearing.serial);
+ assert.equal(labInspection(rig).ready,true);
+});
+test('Stage 11 v9 blueprint roundtrips manipulator mechanism IDs, pose and graph',()=>{
+ const rig=createLabMachine();
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ assert.equal(labManipulatorAction(rig,'bearing',{variant:'wide'}).ok,true);
+ assert.equal(labManipulatorAction(rig,'actuator',{variant:'travel'}).ok,true);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:90}).ok,true);
+ const bp=labBlueprint(rig);
+ assert.equal(bp.version,9);
+ const loaded=loadLabBlueprint(bp);
+ assert.deepEqual(labBlueprint(loaded),bp);
+ const invalid=structuredClone(bp);
+ invalid.manipulator.lowerSerial=bp.manipulator.upperSerial;
+ assert.throws(()=>loadLabBlueprint(invalid));
+ const old=structuredClone(bp);
+ old.version=8;delete old.manipulator;
+ assert.equal(labManipulatorDetails(loadLabBlueprint(old)).attached,false);
+});
+test('Stage 11 rejects over-rated, missing or duplicate link hardware atomically',()=>{
+ const rig=createLabMachine();
+ const before=structuredClone(rig);
+ const invalid=labManipulatorAction(rig,'install',{bearingVariant:'bogus'});
+ assert.equal(invalid.ok,false);
+ assert.deepEqual(rig,before);
+ assert.equal(labManipulatorAction(rig,'install').ok,true);
+ const mounted=structuredClone(rig),arm=labManipulatorDetails(rig);
+ const again=labManipulatorAction(rig,'install');
+ assert.equal(again.ok,false);
+ assert.deepEqual(rig,mounted);
+ assert.equal(labManipulatorAction(rig,'pose',{angle:999}).ok,false);
+ assert.equal(labManipulatorDetails(rig).bearingSerial,arm.bearingSerial);
 });
