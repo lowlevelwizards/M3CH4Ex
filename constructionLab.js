@@ -8,7 +8,7 @@ import { SHARED_PART_IDS, buildPartVisual } from './partVisuals.js';
 import { buildFitFixture } from './chassisFitVisuals.js';
 import { fitFixtureFor } from './chassisFitFixtures.js';
 import { rotatedY } from './assemblyGraph.js';
-import { extractYardwalkerLeg, extractYardwalkerAnatomy, buildRookSparShin } from './yardwalkerVisual.js';
+import { extractYardwalkerLeg, extractYardwalkerAnatomy, buildRookSparShin, buildPylonExtendedShin } from './yardwalkerVisual.js';
 import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,PRESET_NAMES,articulationReport} from './constructionArticulation.js';
 import {applyArticulatedModels,createActiveActuator,updateActiveActuator,coarseClearanceHints} from './constructionArticulationVisual.js';
 import {
@@ -16,7 +16,8 @@ import {
   loadLabBlueprint, labNodeList, labLegAction, labLegDetails,
   labSectionAction, labSectionDetails, labStowed,
   labJointAction,labPosePreset,labPose,
-  labGrounding,labAssistedPreset,labGuidedWalkFrame,labReturnManual,LAB_SLOTS
+  labGrounding,labAssistedPreset,labGuidedWalkFrame,labReturnManual,
+  labViability,labMotionEnvelope,LAB_SLOTS
 } from './constructionLabCore.js';
 
 const $=id=>document.getElementById(id);
@@ -87,11 +88,11 @@ function renderCatalog(){
   });
   if(selectedSlot==='mobility'){
     const workbench=document.createElement('section');workbench.className='card';
-    const title=document.createElement('h2');title.textContent='STAGE 07 / SERVICEABLE ANATOMY';
+    const title=document.createElement('h2');title.textContent='STAGE 08E / VARIABLE GEOMETRY';
     workbench.append(title);
     const note=document.createElement('p');note.className='meta';
     note.textContent=installed==='legs-yard'
-      ?'Both legs have independently mounted hip, thigh, knee, shin, ankle and foot assemblies. Select any section in ASSEMBLY, or use the shin quick actions below.'
+      ?'Shin variants now have independent knee-to-ankle lengths. Try one extended Pylon L1 leg, then inspect the stance and reach report.'
       :'Serviceable anatomy is authored for Yardwalker only. Choose Yardwalker above to test.';
     workbench.append(note);
     for(const leg of labLegDetails(machine)){
@@ -102,11 +103,18 @@ function renderCatalog(){
       const check=labSectionDetails(machine).find(x=>x.side===leg.side);
       if(leg.installed&&check){
         const shin=check.sections.shin;
-        const variant=shin.variant==='rook'?'original':'rook';
-        const t=button(leg.side.toUpperCase()+' SHIN · '+
-          (shin.installed?'SWAP TO '+(variant==='rook'?'ROOK S2':'YARDWALKER'):'INSTALL '+(variant==='rook'?'ROOK S2':'YARDWALKER')),
-          ()=>doSectionAction(leg.side,'shin',shin.installed?'swap':'attach',{variant}));
-        t.style.width='100%';t.style.marginBottom='10px';workbench.append(t);
+        const variants=[['original','YARDWALKER'],['rook','ROOK S2'],['extended','PYLON L1 · +160 MM']];
+        const div=document.createElement('p');div.className='meta';
+        div.textContent=leg.side.toUpperCase()+' / ACTIVE '+(shin.variant||'UNINSTALLED').toUpperCase();
+        workbench.append(div);
+        for(const [variant,label] of variants){
+          const t=button((shin.variant===variant?'✓ ':'')+label,()=>{
+            if(shin.variant===variant)return;
+            doSectionAction(leg.side,'shin',shin.installed?'swap':'attach',{variant});
+          });
+          t.disabled=shin.variant===variant;
+          t.style.marginRight='5px';t.style.marginBottom='7px';workbench.append(t);
+        }
       }
     }
     catalog.prepend(workbench);
@@ -611,9 +619,9 @@ function buildModels(){
     } else if(def?.assemblyRole==='anatomy'){
       if(!anatomyVisuals?.[def.side])
         throw new Error('No source Yardwalker anatomy available');
-      model=def.variant==='rook'
-        ?buildRookSparShin(def.side)
-        :anatomyVisuals[def.side][def.section];
+      model=def.variant==='rook'?buildRookSparShin(def.side):
+        def.variant==='extended'?buildPylonExtendedShin(def.side,def.mechanical.ankleReceiver):
+        anatomyVisuals[def.side][def.section];
       if(!model)throw new Error('Missing original '+def.side+' '+def.section+' geometry');
     } else model=def?makeVisual(def):makeAdapterVisual(node);
     model.name='lab:'+node.serial;
@@ -637,7 +645,12 @@ function buildModels(){
   let bounds=new THREE.Box3().setFromObject(partGroup);
   if(!bounds.isEmpty()){
     partGroup.position.y-=bounds.min.y;
-    neutralGroupY=partGroup.position.y;
+    const extra=labViability(machine).legs
+      ?Math.max(0,...Object.values(labViability(machine).legs).map(l=>l?.extraReachM||0)):0;
+    // Align the lab floor to the ORIGINAL neutral sole datum. An extended
+    // shin must bend to reach that shared plane, not move the entire mech
+    // upward just because its unposed mesh reaches below the floor.
+    neutralGroupY=partGroup.position.y-extra;
     bounds=new THREE.Box3().setFromObject(partGroup);
     // Keep existing frame coordinates; only shift the whole assembled machine.
   }
@@ -718,7 +731,7 @@ function rebuild(fit=true){
   const yard=verdict.mobility;
   stats.textContent=nr+' NODES · '+Math.round(verdict.machineCheck.massKg)+' KG'+
     (yard.legs?' · '+yard.legs+'/2 LEGS':'');
-  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 08 · ARTICULATED':'STAGE 08 · INCOMPLETE';
+  $('stageMode').textContent=absent?'INCOMPLETE':yard.complete?'STAGE 08E · GEOMETRY':'STAGE 08E · INCOMPLETE';
   if(!verdict.valid)setMessage(verdict.graphCheck.errors.join(' | '),true);
   else if(!verdict.ready)setMessage(verdict.mobility.complete?
     'Structurally valid · not combat-ready in live rules':
