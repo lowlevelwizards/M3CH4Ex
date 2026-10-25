@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
  GB_VERSION,MANDATORY,FRAMES,CABS,MOBILITY,COMBAT,POWER,SUPPORT,
  emptyBuild,defaultBuild,install,addSupport,removeSupport,changeFrame,inspect,
- validSockets,loadGraybox,exportGraybox,recipe,RECIPES,PAINTS,socketsForFrame
+ validSockets,loadGraybox,exportGraybox,recipe,RECIPES,PAINTS,socketsForFrame,
+ socketsForBuild,setLimbPlating
 } from '../grayboxCore.js';
 import {setForm} from '../grayboxCore.js';
 import {HOUSINGS,CARRIERS,STANCES,FEET,normalizeForm,matingTransform} from '../grayboxArchitecture.js';
@@ -177,4 +178,33 @@ test('Stage 14: older graybox v1 blueprints migrate form controls without losing
  assert.deepEqual(restored.form,normalizeForm());
  assert.equal(inspect(restored).valid,true);
  assert.equal(restored.installed.combat.id,old.installed.combat.id);
+});
+
+test('Stage 14 nested cab and weapon sockets exist only while their parent assemblies are installed',()=>{
+ const rig=defaultBuild();
+ const nested=socketsForBuild(rig);
+ const cab=nested.find(x=>x.id==='cab-accessory-top');
+ const weapon=nested.find(x=>x.id==='weapon-shield');
+ assert.equal(cab.parent,'cab');
+ assert.equal(weapon.parent,'combat');
+ assert.ok(validSockets(rig,'support','support-sensor').some(x=>x.id===cab.id));
+ assert.ok(validSockets(rig,'support','support-shield').some(x=>x.id===weapon.id));
+ assert.equal(addSupport(rig,'support-sensor','cab-accessory-top').ok,true);
+ assert.equal(addSupport(rig,'support-shield','weapon-shield').ok,true);
+ assert.equal(inspect(rig).valid,true,inspect(rig).issues.join('; '));
+ assert.deepEqual(loadGraybox(exportGraybox(rig)),rig);
+ delete rig.installed.combat;
+ assert.equal(inspect(rig).valid,false,'Orphaned weapon shield must not be considered valid');
+});
+test('Stage 14 independent left/right mechanical leg armor preserves asymmetry and module identities',()=>{
+ const rig=defaultBuild(),original=inspect(rig).mass;
+ assert.equal(setLimbPlating(rig,'left',2).ok,true);
+ assert.equal(setLimbPlating(rig,'right',0).ok,true);
+ assert.equal(inspect(rig).mass,original+70);
+ rig.accentByAssembly['leg-left']=PAINTS.red;
+ assert.deepEqual(loadGraybox(exportGraybox(rig)),rig);
+ assert.equal(setLimbPlating(rig,'right',4).ok,false);
+ assert.equal(rig.limbPlating.right,0);
+ const old=exportGraybox(rig);delete old.limbPlating;
+ assert.deepEqual(loadGraybox(old).limbPlating,{left:0,right:0});
 });
