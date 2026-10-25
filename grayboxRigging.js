@@ -85,7 +85,8 @@ export function markMechanicalChain(root,parts){
 export function mechanicalChainErrors(chain,tolerance=.0001){
  const problems=[];
  for(let i=0;i<chain.length;i++){
-  const a=chain[i];if(a.length<.04)problems.push('Collapsed segment '+a.name);
+  const a=chain[i],length=V(a.start).distanceTo(V(a.end));
+  if(length<.04)problems.push('Collapsed segment '+a.name);
   if(i>0&&V(chain[i-1].end).distanceTo(V(a.start))>tolerance)
    problems.push('Disconnected joint '+a.name);
  }
