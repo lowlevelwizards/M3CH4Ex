@@ -21,9 +21,9 @@ export function groundedTargets(name){
   switch(name){
     case 'neutral':break;
     case 'crouch':state.bodyDropM=.15;break;
-    case 'step-left':state.bodyDropM=.055;state.feet.left={z:-.18,y:.12,planted:false};break;
-    case 'step-right':state.bodyDropM=.055;state.feet.right={z:-.18,y:.12,planted:false};break;
-    case 'asymmetric':state.bodyDropM=.09;state.feet.left={z:-.13,y:.09,planted:false};break;
+    case 'step-left':state.bodyDropM=.035;state.feet.left={z:-.18,y:.09,planted:false};break;
+    case 'step-right':state.bodyDropM=.035;state.feet.right={z:-.18,y:.09,planted:false};break;
+    case 'asymmetric':state.bodyDropM=.04;state.feet.left={z:-.13,y:.075,planted:false};break;
     default:throw new Error('Unknown grounded movement '+name);
   }
   return state;
@@ -113,7 +113,7 @@ export function contactWalkFrame(t){
   g.bodyDropM=.04;
   const step=(u,from,to)=>{
     const f=smooth(clamp(u,0,1));
-    return {z:round(from+(to-from)*f),y:round(Math.sin(Math.PI*f)*.13),
+    return {z:round(from+(to-from)*f),y:round(Math.sin(Math.PI*f)*.10),
       planted:u<=0||u>=1};
   };
   if(t<.5){
