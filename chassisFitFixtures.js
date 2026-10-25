@@ -51,7 +51,8 @@ export function fitFixtureFor(definitionId) {
         envelope: physical.envelope.slice(), massKg: physical.massKg,
         loadLimitKg: physical.loadLimitKg, center: physical.center.slice(),
         standard: physical.accepts, nativeStandard: physical.accepts,
-        sockets: physical.sockets.map(s=>({...s,position:s.position.slice(),rotation:s.rotation.slice()})),
+        sockets: physical.sockets.map(s=>({...s,position:s.position.slice(),
+          rotation:Array.isArray(s.rotation)?s.rotation.slice():[0,0,0]})),
         construction: 'authored live structural geometry; catalogue sockets unchanged',
     };
     const envelope = physical.envelope.slice();
