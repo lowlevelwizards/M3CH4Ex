@@ -1,3 +1,5 @@
+import {BY_ID} from '../components.js';
+import {proposeComponentReplacement} from '../assemblyGraph.js';
 import {JOINT_LIMITS,PRESET_NAMES,articulationReport,actuatorStrokeCheck} from '../constructionArticulation.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -200,7 +202,7 @@ test('Stage 07 blueprint roundtrip preserves mixed shins and stowed supported br
   assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
   assert.equal(labSectionAction(rig,'right','shin','detach',{cascade:true}).ok,true);
   const bp=labBlueprint(rig);
-  assert.equal(bp.version,6);
+  assert.equal(bp.version,7);
   const saved=JSON.stringify(bp);
   const restored=loadLabBlueprint(bp);
   assert.equal(JSON.stringify(labBlueprint(restored)),saved);
@@ -262,7 +264,7 @@ test('Stage 08 blueprint persists six mechanical degrees of freedom with v3 comp
   assert.equal(labJointAction(machine,'right','hip',-20).ok,true);
   assert.equal(labSectionAction(machine,'left','shin','swap',{variant:'rook'}).ok,true);
   const bp=labBlueprint(machine);
-  assert.equal(bp.version,6);
+  assert.equal(bp.version,7);
   const restored=loadLabBlueprint(bp);
   assert.deepEqual(labPose(restored),labPose(machine));
   assert.deepEqual(labBlueprint(restored),bp);
@@ -337,7 +339,7 @@ test('08D v5 blueprint stores foot targets and rejects mismatched joint data',()
   const result=labAssistedPreset(rig,'step-left');
   assert.equal(result.ok,true,result.reason);
   const blueprint=labBlueprint(rig);
-  assert.equal(blueprint.version,6);
+  assert.equal(blueprint.version,7);
   const imported=loadLabBlueprint(blueprint);
   assert.deepEqual(labBlueprint(imported),blueprint);
   const corrupted=structuredClone(blueprint);
@@ -406,7 +408,7 @@ test('08E Pylon can exchange sides, revert to stock geometry, and roundtrip blue
   assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'extended'}).ok,true);
   assert.equal(labSectionAction(rig,'right','shin','swap',{variant:'rook'}).ok,true);
   const first=labBlueprint(rig);
-  assert.equal(first.version,6);
+  assert.equal(first.version,7);
   const copy=loadLabBlueprint(first);
   assert.deepEqual(labBlueprint(copy),first);
   assert.equal(labSectionDetails(copy)[0].sections.shin.variant,'extended');
@@ -435,4 +437,94 @@ test('08E impossible reference reach is rejected without silently clipping an as
   const result=labSolveGrounded(rig,target);
   assert.equal(result.ok,false);
   assert.equal(JSON.stringify(labBlueprint(rig)),before);
+});
+
+test('Stage 09 generic replacement preserves everything below a different-sized thigh',()=>{
+  const rig=createLabMachine(),mass=labInspection(rig).machineCheck.massKg;
+  const before=labSectionDetails(rig)[0].sections;
+  const r=labSectionAction(rig,'left','thigh','swap',{variant:'compact'});
+  assert.equal(r.ok,true,r.reason);
+  const after=labSectionDetails(rig)[0].sections;
+  assert.equal(after.thigh.variant,'compact');
+  assert.notEqual(after.thigh.serial,before.thigh.serial);
+  for(const part of ['knee','shin','ankle','foot'])
+    assert.equal(after[part].serial,before[part].serial,part+' serial should survive');
+  assert.equal(labInspection(rig).graph.nodes[after.knee.serial].parentSerial,after.thigh.serial);
+  assert.equal(labInspection(rig).machineCheck.massKg,mass-15);
+  assert.equal(labInspection(rig).valid,true);
+  const g=labViability(rig);
+  assert.equal(g.ground,true,g.standReason);
+  assert.ok(g.legs.left.upperLengthM<g.legs.right.upperLengthM-.06);
+  assert.equal(labSectionAction(rig,'left','thigh','swap',{variant:'original'}).ok,true);
+});
+test('Stage 09 stabilizer foot changes actual sole ground datum and mass',()=>{
+  const rig=createLabMachine();
+  const before=labInspection(rig).machineCheck.massKg;
+  const old=labSectionDetails(rig)[1].sections.ankle.serial;
+  const result=labSectionAction(rig,'right','foot','swap',{variant:'stabilizer'});
+  assert.equal(result.ok,true,result.reason);
+  const after=labSectionDetails(rig)[1].sections;
+  assert.equal(after.foot.variant,'stabilizer');
+  assert.equal(after.ankle.serial,old);
+  assert.equal(labInspection(rig).machineCheck.massKg,before+28);
+  assert.equal(labViability(rig).legs.right.footContactDropM,.04);
+  assert.equal(labGrounding(rig).mode,'grounded');
+});
+test('Stage 09 incompatible or unsupported substitutions reject atomically',()=>{
+  const rig=createLabMachine(),parts=labSectionDetails(rig)[0].sections;
+  const other=rig.owned.find(o=>o.definitionId==='dockpad-f2-foot-left');
+  const proposal=proposeComponentReplacement(rig,BY_ID,parts.thigh.serial,other.serial);
+  assert.equal(proposal.ok,false);
+  const old=JSON.stringify(labBlueprint(rig));
+  assert.equal(labSectionAction(rig,'left','thigh','swap',{variant:'extended'}).ok,false);
+  assert.equal(JSON.stringify(labBlueprint(rig)),old);
+  const mountedRight=labSectionDetails(rig)[1].sections.thigh.serial;
+  const wrongSide=proposeComponentReplacement(rig,BY_ID,parts.thigh.serial,mountedRight);
+  assert.equal(wrongSide.ok,false);
+  assert.equal(JSON.stringify(labBlueprint(rig)),old);
+});
+test('Stage 09 complete asymmetric thigh/shin/foot mix stands, crouches, steps and exports',()=>{
+  const rig=createLabMachine(),original=labInspection(rig).machineCheck.massKg;
+  for(const [section,variant] of [
+    ['thigh','compact'],['shin','extended'],['foot','stabilizer']
+  ]){
+    const r=labSectionAction(rig,'left',section,'swap',{variant});
+    assert.equal(r.ok,true,section+' '+r.reason);
+  }
+  const geom=labViability(rig);
+  assert.equal(geom.structure,true);
+  assert.equal(geom.ground,true,geom.standReason);
+  assert.equal(geom.legs.left.thighVariant,'compact');
+  assert.equal(geom.legs.left.variant,'extended');
+  assert.equal(geom.legs.left.footVariant,'stabilizer');
+  assert.equal(labInspection(rig).machineCheck.massKg,original+38);
+  const crouch=labAssistedPreset(rig,'crouch');
+  assert.equal(crouch.ok,true,crouch.reason);
+  const envelope=labMotionEnvelope(rig);
+  assert.equal(envelope.ok,true,envelope.reason);
+  for(let i=0;i<=20;i++){
+    const frame=labGuidedWalkFrame(rig,i/20,envelope);
+    assert.equal(frame.ok,true,'step '+i+' '+frame.reason);
+  }
+  const blueprint=labBlueprint(rig);
+  assert.equal(blueprint.version,7);
+  const loaded=loadLabBlueprint(blueprint);
+  assert.deepEqual(labBlueprint(loaded),blueprint);
+  assert.equal(labSectionDetails(loaded)[0].sections.foot.variant,'stabilizer');
+  assert.equal(labSectionAction(loaded,'left','foot','swap',{variant:'original'}).ok,true);
+  assert.equal(labSectionAction(loaded,'left','shin','swap',{variant:'rook'}).ok,true);
+  assert.equal(labSectionAction(loaded,'left','thigh','swap',{variant:'original'}).ok,true);
+  assert.equal(labInspection(loaded).valid,true);
+});
+test('Stage 09 parked originals and attached children keep identity across equipment swap',()=>{
+  const rig=createLabMachine();
+  for(const [section,variant] of [['thigh','compact'],['shin','rook'],['foot','stabilizer']])
+    assert.equal(labSectionAction(rig,'right',section,'swap',{variant}).ok,true);
+  const installed=labSectionDetails(rig)[1].sections;
+  assert.equal(labEquip(rig,'combat','gun-short').ok,true);
+  assert.equal(labSetGeneratorMount(rig,'offset').ok,true);
+  const next=labSectionDetails(rig)[1].sections;
+  for(const section of ['thigh','shin','foot'])
+    assert.equal(next[section].serial,installed[section].serial);
+  assert.equal(labInspection(rig).valid,true);
 });
