@@ -155,10 +155,14 @@ export function updateActiveActuator(actuator,assembly,cache,graph,poseMap){
   }
   group.userData.deviceSerial=device.serial;
   const layout=YARDWALKER_LAYOUT.legs.find(l=>l.side===(side==='left'?-1:1));
-  const upper=point(diff(layout.actuatorTop,layout.hip)).applyMatrix4(cache.get(thigh.serial).matrix);
-  const offset=device.definition.secondAnchorOffset||ACTUATOR_SPEC.lowerFromKnee;
-  const lower=point([layout.side*ACTUATOR_SPEC.lowerOutboardM,
-    offset[1],offset[2]]).applyMatrix4(cache.get(shin.serial).matrix);
+  const thighDef=BY_ID.get(thigh.definitionId),shinDef=BY_ID.get(shin.definitionId);
+  const upperLocal=thighDef?.sockets?.find(s=>s.id==='drive-mount')?.position||
+    diff(layout.actuatorTop,layout.hip);
+  const lowerLocal=shinDef?.mechanical?.driveAnchors?.[device.definition.variant]||
+    [layout.side*ACTUATOR_SPEC.lowerOutboardM,
+      ACTUATOR_SPEC.lowerFromKnee[1],ACTUATOR_SPEC.lowerFromKnee[2]];
+  const upper=point(upperLocal).applyMatrix4(cache.get(thigh.serial).matrix);
+  const lower=point(lowerLocal).applyMatrix4(cache.get(shin.serial).matrix);
   const vector=lower.clone().sub(upper),length=vector.length();
   const stroke=device.definition.stroke;
   const housingEnd=upper.clone().addScaledVector(vector,Math.min(1,stroke.housing/length));
