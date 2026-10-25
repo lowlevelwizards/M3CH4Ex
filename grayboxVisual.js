@@ -266,28 +266,66 @@ function supportVisual(part,paint){
   case 'arm-light':
   case 'arm-heavy':
   case 'arm': {
-   // Reuse the Stage 11 machined load members, not the previous three
-   // unsupported graybox cylinders. The graybox poses them as one STATIC
-   // assembly; it does not pretend to add live combat manipulator behavior.
-   const base=buildManipulatorBracketVisual(BY_ID.get('construction-manip-bracket'));
-   g.add(base);
-   const upper=buildUniversalLinkVisual(BY_ID.get('construction-link-530'));
-   upper.rotation.x=-Math.PI/2;upper.position.set(0,-.11,-.14);
-   g.add(upper);
-   sphere(g,[0,-.61,-.03],.135,JOINT,'shared swivel joint');
-   const lower=buildUniversalLinkVisual(BY_ID.get('construction-link-430'));
-   lower.position.set(0,-.61,-.03);lower.rotation.x=-1.20;
-   g.add(lower);
-   // The fingers are a single generic end-effector, not simulated hand bones.
-   for(const sign of [-1,1])
-    box(g,[sign*.145,-1.05,-.20],[.087,.23,.12],DARK,'service gripper jaw');
-   if(part.form==='arm-heavy'){
-    box(g,[0,-.32,-.17],[.40,.47,.23],main,'industrial upper-arm protection');
-    box(g,[0,-.77,-.20],[.34,.40,.25],main,'industrial forearm enclosure');
-    sphere(g,[0,-.60,-.03],.16,JOINT,'heavy elbow bearing');
-   }else if(part.form==='arm-light'){
-    g.scale.setScalar(.84);
+   // Each Stage 11 link has its own ACTUAL mechanical tip. The next bearing
+   // and every terminal component are computed from that tip, never from
+   // guessed world offsets or a model-wide bounding box.
+   const heavy=part.form==='arm-heavy',light=part.form==='arm-light',
+    bracketDef=BY_ID.get('construction-manip-bracket'),
+    upperDef=BY_ID.get('construction-link-530'),
+    lowerDef=BY_ID.get('construction-link-430');
+   const bracket=buildManipulatorBracketVisual(bracketDef);
+   bracket.name='structural arm mounting bracket';g.add(bracket);
+   const shoulder=bracketDef.sockets[0].position;
+   const shoulderV=new THREE.Vector3(...shoulder);
+   sphere(g,[...shoulder],heavy?.16:.12,JOINT,'real shoulder bearing');
+   function link(parent,def,name,target){
+    const mesh=buildUniversalLinkVisual(def);
+    const tip=new THREE.Vector3(...(def.mechanical?.end||[0,-.42,-.09]));
+    const pivot=new THREE.Group();pivot.name=name+' joint root';
+    const desired=new THREE.Vector3(...target).normalize();
+    const q=new THREE.Quaternion().setFromUnitVectors(tip.clone().normalize(),desired);
+    pivot.quaternion.copy(q);pivot.add(mesh);parent.add(pivot);
+    pivot.userData.linkEnd=[...tip];
+    return {pivot,tip:tip.applyQuaternion(q)};
    }
+   const upperRoot=new THREE.Group();upperRoot.name='shoulder articulated pivot';
+   upperRoot.position.copy(shoulderV);g.add(upperRoot);
+   const u=link(upperRoot,upperDef,'upper arm',[.04,-1,-.24]);
+   const elbow=new THREE.Vector3(...shoulder).add(u.tip);
+   const elbowJoint=new THREE.Group();
+   elbowJoint.name='elbow articulated bearing';elbowJoint.position.copy(elbow);
+   g.add(elbowJoint);sphere(elbowJoint,[0,0,0],heavy?.16:.12,JOINT,'elbow pin');
+   const l=link(elbowJoint,lowerDef,'forearm',[-.05,-1,.11]);
+   const wrist=elbow.clone().add(l.tip);
+   const end=new THREE.Group();end.name='actual wrist/end-effector socket';
+   end.position.copy(wrist);g.add(end);
+   box(end,[0,0,0],[heavy?.36:.27,.19,.25],secondary,'wrist carrier flange');
+   sphere(end,[0,-.085,0],.095,JOINT,'gripper swivel bearing');
+   box(end,[0,-.16,-.01],[.27,.19,.23],secondary,'gripper palm');
+   for(const sign of [-1,1]){
+    // Each gripping jaw starts at its OWN palm hinge; nothing floats below.
+    sphere(end,[sign*.115,-.25,-.06],.063,JOINT,'jaw hinge '+sign);
+    box(end,[sign*.145,-.34,-.08],[.078,.21,.13],DARK,
+     'attached service gripper jaw '+sign);
+   }
+   if(heavy){
+    // Armour is parented to the corresponding articulated link.
+    const upperCover=box(u.pivot,[0,-.25,-.07],[.38,.43,.25],main,
+      'articulated upper-arm plate');
+    upperCover.rotation.x=-.12;
+    box(l.pivot,[0,-.20,-.055],[.34,.30,.25],main,
+      'articulated forearm protection');
+   }else if(!light){
+    box(u.pivot,[0,-.22,-.08],[.26,.31,.18],main,
+      'utility upper arm sleeve');
+   }
+   g.userData.mechanicalChain=[
+    {name:'upper',start:[...shoulder],end:elbow.toArray()},
+    {name:'lower',start:elbow.toArray(),end:wrist.toArray()},
+    {name:'hand',start:wrist.toArray(),end:[wrist.x,wrist.y-.42,wrist.z-.08]}
+   ];
+   g.userData.shoulderLocal=[...shoulder];
+   g.userData.wristLocal=wrist.toArray();
    g.userData.grayboxVisualSource='stage11-linked-service-arm';
    break;
   }
