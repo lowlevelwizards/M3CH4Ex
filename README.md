@@ -16,10 +16,11 @@ The root `index.html` is the white construction studio; it is not the combat gam
 - Existing M3CH4 catalogue modules and production-authored visuals where available
 - A few explicitly labeled envelope proxies for unmigrated individual part visuals
 - Existing five-station assembly swaps, graph-based structural inspection, visible sockets, H2/U1 adapter and generator outrigger
+- **Stage 06**: independently owned left/right Yardwalker leg nodes at authored hip sockets, actual leg mesh detachment/reinstallation, selectable sockets, and detached-part tray
 - Isolate / explode previews, JSON blueprint export and import
 - Assembly and blueprint unit tests
 
-**Not implemented yet:** independent left/right leg mounting, sub-leg components, arbitrary attachment topology, articulated subcomponent swapping, unrestricted paint, new manufacturers, combat or full physics.
+**Not implemented yet:** mixed-family left/right legs, replaceable shins and knees, arbitrary new attachment topology, dynamic articulation of swapped subcomponents, unrestricted paint, new manufacturers, combat, or full physics. The original paired Kestrel and Hauler assemblies remain intact.
 
 ## Why some source files are here
 
