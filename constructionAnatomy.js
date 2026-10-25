@@ -9,7 +9,7 @@ import {proposeComponentReplacement} from './assemblyGraph.js';
 import {DEVICE_TYPES,refreshDeviceTarget} from './constructionMechanisms.js';
 
 export const ANATOMY_ORDER=Object.freeze(['hip','thigh','knee','shin','ankle','foot']);
-export const ANATOMY_MASS=Object.freeze({hip:80,thigh:140,knee:65,shin:110,ankle:45,foot:60});
+export const ANATOMY_MASS=Object.freeze({hip:80,thigh:126,knee:56,shin:110,ankle:45,foot:60});
 export const ROOK_SHIN_KG=90;
 export const PYLON_SHIN_KG=135;
 export const PYLON_EXTENSION_M=.16;
@@ -61,7 +61,7 @@ for(const side of LEG_SIDES){
       const id=anatomyId(side,section,variant);
       const kg=variant==='rook'?ROOK_SHIN_KG:
         variant==='extended'?PYLON_SHIN_KG:
-        variant==='compact'?125:
+        variant==='compact'?111:
         variant==='stabilizer'?69:ANATOMY_MASS[section];
       const attach=section==='shin'?{
         ...sockets.shin,
