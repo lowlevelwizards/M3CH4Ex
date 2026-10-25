@@ -6,6 +6,7 @@ import {FRAMES,CATALOG,BY_PART,PAINTS,RECIPES,defaultBuild,validSockets,
  install,addSupport,removeSupport,changeFrame,inspect,recipe,
  loadGraybox,exportGraybox,socketsForFrame} from './grayboxCore.js';
 import {buildGrayboxScene} from './grayboxVisual.js';
+import {planTestYardDeployment,storeTestYardDeployment} from './grayboxDeployment.js';
 import {AUDIT_CATEGORIES,buildAuditScene,auditText} from './grayboxAudit.js';
 import {HOUSINGS,CARRIERS,STANCES,FEET,DEFAULT_FORM} from './grayboxArchitecture.js';
 import {setForm,setLimbPlating} from './grayboxCore.js';
@@ -396,6 +397,19 @@ for(const [id,name] of [['gb-quarter','quarter'],['gb-front','front'],
 $('reset').addEventListener('click',()=>{
  model=defaultBuild();activeCategory='frame';pending=null;save();renderPanels();refreshStage();
  status('Stock graybox rig restored');
+});
+$('deploy').addEventListener('click',()=>{
+ const plan=planTestYardDeployment(model);
+ if(!plan.ok){status(plan.reason,true);return;}
+ const replacements=plan.substitutions.map(s=>s.original+' → '+s.live);
+ const notice='DEPLOY TO LIVE TEST YARD?\n\n'+
+  (replacements.length?'PROTOTYPE SUBSTITUTIONS:\n'+replacements.join('\n')+'\n\n':'')+
+  plan.notice+'\n\nYour complete experimental machine stays saved here.';
+ if(!window.confirm(notice)){status('Deployment cancelled; constructor unchanged.');return;}
+ try{
+  const url=storeTestYardDeployment(plan,window.localStorage);
+  window.location.assign(url);
+ }catch(error){status('Could not hand off loadout: '+error.message,true);}
 });
 $('export').addEventListener('click',()=>{
  try{
