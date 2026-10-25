@@ -136,7 +136,8 @@ export function defaultBuild(){
   installed:{cab:null,combat:null,mobility:null,power:null},
   support:{},armor:{frame:1,cab:1,mobility:1,combat:0},
   paint:{main:'#938b5e',secondary:'#475c56',accent:'#d69b4f'},
-  accentByAssembly:{},form:{...DEFAULT_FORM}};
+  accentByAssembly:{},form:{...DEFAULT_FORM},
+  limbPlating:{left:0,right:0}};
  for(const [category,id,preferred] of [
   ['cab','cab-utility','cab-top'],['combat','gun-short','combat-right'],
   ['mobility','legs-yard','mobility-bottom'],['power','power-dynamo','power-rear']]){
@@ -150,7 +151,14 @@ export function emptyBuild(frame='frame-sr'){
   installed:{cab:null,combat:null,mobility:null,power:null},
   support:{},armor:{frame:0,cab:0,mobility:0,combat:0},
   paint:{main:'#938b5e',secondary:'#475c56',accent:'#d69b4f'},
-  accentByAssembly:{},form:{...DEFAULT_FORM}};
+  accentByAssembly:{},form:{...DEFAULT_FORM},
+  limbPlating:{left:0,right:0}};
+}
+export function setLimbPlating(state,side,level){
+ if(!['left','right'].includes(side)||!Number.isInteger(level)||level<0||level>2)
+  return {ok:false,reason:'Invalid independent limb armor'};
+ state.limbPlating={left:0,right:0,...state.limbPlating,[side]:level};
+ return {ok:true};
 }
 export function setForm(state,key,id){
  if(!['housing','carrier','stance','feet'].includes(key))
@@ -224,7 +232,9 @@ export function inspect(state){
  const armorMass=Object.values(state.armor).reduce((n,level)=>n+Number(level)*80,0);
  const form=normalizeForm(state.form);
  const housing=fromId(HOUSINGS,form.housing),carrier=fromId(CARRIERS,form.carrier);
- const totalMass=baseMass+armorMass+housing.mass+carrier.mass;
+ const sidePlates=state.limbPlating||{left:0,right:0};
+ const sideMass=(sidePlates.left+sidePlates.right)*35;
+ const totalMass=baseMass+armorMass+housing.mass+carrier.mass+sideMass;
  const available=all.find(x=>POWER.includes(x))?.draw||0;
  // Arm actuators are not drawing continuously in a static workshop pose.
  // Record peak motion draw separately; never pretend a pose preview drives a servo.
@@ -318,9 +328,14 @@ export function loadGraybox(input){
   x.paint[key]=input.paint[key];
  }
  x.form=normalizeForm(input.form);
+ for(const side of ['left','right']){
+  const value=input.limbPlating?.[side]??0;
+  if(!Number.isInteger(value)||value<0||value>2)throw Error('Invalid '+side+' limb plating');
+  x.limbPlating[side]=value;
+ }
  x.accentByAssembly={};
  for(const [key,value] of Object.entries(input.accentByAssembly||{})){
-  if(!['frame','cab','combat','mobility','power'].includes(key)&&
+  if(!['frame','cab','combat','mobility','power','leg-left','leg-right'].includes(key)&&
      !socketsForBuild(x).some(s=>s.id===key))throw Error('Unknown paint target');
   if(!/^#[0-9a-f]{6}$/i.test(value))throw Error('Invalid subassembly color');
   x.accentByAssembly[key]=value;
