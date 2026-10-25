@@ -27,3 +27,19 @@ aside{display:flex;flex-direction:column;width:min(340px,34vw);min-height:0;back
  .pose-presets button{min-height:38px}
  .joint-control input[type=range]{min-height:38px}
 }
+
+/* Stage 09: nested component selector without overwhelming small screens. */
+.leg-builder{border:1px solid #d7e1da;border-radius:8px;background:#f8faf7;
+  margin:8px 0;padding:5px 9px}
+.leg-builder summary{cursor:pointer;list-style-position:inside;font-weight:800;
+  padding:8px 4px;letter-spacing:.055em;color:#344d43;min-height:38px}
+.leg-variants{display:flex;gap:5px;flex-wrap:wrap;align-items:center;
+  border-top:1px solid #e1e8e2;padding:9px 2px}
+.leg-variants strong{font-size:10px;letter-spacing:.06em;min-width:52px}
+.leg-variants button{min-height:34px;padding:6px 9px;font-size:10px}
+.leg-variants button:disabled{opacity:.76;font-weight:800;border-color:#9eb7a9}
+@media(max-width:730px){
+ .leg-variants{gap:6px}
+ .leg-variants button{min-height:38px}
+ .leg-builder summary{min-height:44px}
+}
