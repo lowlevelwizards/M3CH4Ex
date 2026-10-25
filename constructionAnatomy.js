@@ -81,6 +81,10 @@ for(const side of LEG_SIDES){
           variant==='stabilizer'?'Dockpad F2 / '+side+' broad stabilizer foot':
           'Yardwalker '+side+' '+section,slot:'anatomy',side,
         section,variant,assemblyRole:'anatomy',massKg:kg,mountSize:'medium',
+        kinematic:['hip','knee','ankle'].includes(section)
+          ?{axis:'x',command:'anatomy',range:section==='hip'?{min:-35,max:55}:
+            section==='knee'?{min:-10,max:100}:{min:-35,max:45}}
+          :undefined,
         mountInterface:{kind:['thigh','shin'].includes(section)?'structural-link':section,
           standard:'medium',orientation:[0,1,0],
           applications:['thigh','shin'].includes(section)
