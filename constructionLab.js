@@ -352,7 +352,7 @@ function jointControl(side,joint,container){
   const exists=labSectionDetails(machine).find(x=>x.side===side)?.sections?.[joint]?.installed;
   slider.disabled=!exists;slider.setAttribute('aria-label',side+' '+joint+' mechanical joint');
   slider.addEventListener('input',()=>{
-    stopSweep(false);
+    stopSweep(true);
     const next=Number(slider.value);
     const result=labJointAction(machine,side,joint,next);
     if(!result.ok){setMessage(result.reason,true);slider.value=String(labPose(machine)[side+':'+joint]);return;}
@@ -611,7 +611,9 @@ function applyExplode(){
   }
   for(const actuator of actuators){
     const status=updateActiveActuator(actuator,machine,cache,graph,nodeWorldPoses);
-    actuator.group.visible=status.visible&&!isolate&&fraction<.01;
+    const focusDef=BY_ID.get(graph.nodes[selectedSerial]?.definitionId);
+    actuator.group.visible=status.visible&&fraction<.01&&
+      (!isolate||(focusDef?.assemblyRole==='anatomy'&&focusDef.side===actuator.side));
   }
   partGroup.updateMatrixWorld(true);
   clearance=fraction===0?coarseClearanceHints(graph,partRoots):
@@ -622,14 +624,9 @@ function applyExplode(){
 }
 function applyIsolation(){
   for(const [serial,model] of partRoots)model.visible=!isolate||serial===selectedSerial;
-  const current=labNodeList(machine).find(n=>n.serial===selectedSerial);
-  const def=BY_ID.get(current?.definitionId);
-  for(const actuator of actuators){
-    actuator.group.visible=actuator.group.visible&&
-      (!isolate||(def?.assemblyRole==='anatomy'&&def.side===actuator.side));
-  }
-  markerGroup.visible=!isolate&&socketToggle.checked&&Number(explode.value)<1;
-  refreshSelection();
+  // Re-evaluate actuator ownership each time; never latch an actuator hidden
+  // after leaving isolation mode.
+  applyExplode();
 }
 function refreshSelection(){
   const part=partRoots.get(selectedSerial);
