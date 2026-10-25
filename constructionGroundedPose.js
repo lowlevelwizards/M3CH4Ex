@@ -97,8 +97,11 @@ export function applyGrounding(assembly,targets,opts={}){
   return result;
 }
 export function returnToManual(assembly){
-  const pose=assembly.labPose||neutralPose();
+  // Manual mode owns its own joint state. A guided crouch must never leave the
+  // body's translation reset with the legs still folded into the old IK pose.
+  const pose=structuredClone(assembly.labManualPose||assembly.labPose||neutralPose());
   assembly.labGrounding=neutralGrounding();
+  assembly.labPose=pose;
   assembly.labManualPose=structuredClone(pose);
   return {ok:true,pose};
 }
