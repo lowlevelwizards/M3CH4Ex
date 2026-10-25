@@ -68,7 +68,7 @@ export function planTestYardDeployment(input){
 export function storeTestYardDeployment(plan,storage){
  if(!plan?.ok||!plan.parts)throw Error('Only a validated rig may deploy.');
  storage.setItem(TEST_YARD_PRESET_KEY,JSON.stringify({
-  version:1,parts:plan.parts,equipment:{}
+  version:1,source:'m3ch4ex',parts:plan.parts,equipment:{}
  }));
  return plan.url;
 }
