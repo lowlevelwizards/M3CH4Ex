@@ -282,10 +282,20 @@ function renderInspection(){
     card.append(note);
     if(ARTICULATION_JOINTS.includes(section))jointControl(side,section,card);
     if(section==='shin'){
-      const alternative=selectedSection.variant==='original'?'rook':'original';
-      const replace=button('REPLACE SHIN → '+(alternative==='rook'?'ROOK S2 SPAR':'ORIGINAL YARDWALKER'),
-        ()=>doSectionAction(side,'shin','swap',{variant:alternative}));
-      replace.style.width='100%';card.append(replace);
+      const mechanics=selectedSection.mechanical;
+      if(mechanics){
+        const size=document.createElement('p');size.className='meta';
+        size.textContent='KNEE → ANKLE '+Math.round(mechanics.spanM*1000)+' mm'+
+          ' · EXTRA VERTICAL REACH '+Math.round(mechanics.nominalExtraReachM*1000)+' mm'+
+          ' · standard '+mechanics.upperStandard+'/'+mechanics.lowerStandard;
+        card.append(size);
+      }
+      for(const [variant,label] of [['original','YARDWALKER'],['rook','ROOK S2'],['extended','PYLON L1']]){
+        if(variant===selectedSection.variant)continue;
+        const replace=button('REPLACE SHIN → '+label,
+          ()=>doSectionAction(side,'shin','swap',{variant}));
+        replace.style.width='100%';replace.style.marginBottom='5px';card.append(replace);
+      }
     }
     const detach=button('DETACH '+section.toUpperCase()+
       (descendants.length?' WITH SUPPORTED ASSEMBLIES':''),
@@ -339,7 +349,7 @@ function renderInspection(){
     }
   }
   const info=document.createElement('p');info.className='explain';
-  info.textContent='Stage 07: genuine nested Yardwalker anatomy with serviceable shins. All removals are checked for supported components. Kestrel, Hauler and free-form mounts remain outside this stage.';
+  info.textContent='Stage 08E: shin-specific reach, authored joint anchors and compatible geometry. Mismatched legs can require reduced crouch or step travel; full balance physics remains deferred.';
   inspect.append(info);
 }
 /** A joint belongs to the bearing, not to the meshes being rotated.
@@ -434,11 +444,47 @@ function renderPosePanel(){
       const result=labAssistedPreset(machine,preset);
       if(!result.ok){setMessage(result.reason,true);return;}
       applyExplode();renderPosePanel();
-      setMessage('Assisted · '+titles[preset]+' · live foot-target IK');
+      setMessage('Assisted · '+titles[preset]+
+        (result.limited?' · LIMITED TO '+Math.round(result.movementScale*100)+'% OF REQUESTED TRAVEL':' · FULL TARGET REACHED'));
     });
     row.append(b);
   }
   intro.append(row);
+  const viability=labViability(machine);
+  const reportBox=document.createElement('section');reportBox.className='card';
+  const reportTitle=document.createElement('h2');reportTitle.textContent='CONSTRUCTION VIABILITY';reportBox.append(reportTitle);
+  const metrics=[
+    ['Structural connections',viability.structure?'VALID':'INVALID'],
+    ['Ground contact',viability.ground?'BOTH FEET REACH':'NOT SUPPORTED'],
+    ['Full 15 cm crouch',viability.fullCrouch?'REACHABLE':'REQUIRES REDUCED DROP'],
+    ['Two-step preview',viability.walkPreview?'REACHABLE':'LIMITED / UNREACHABLE'],
+    ['Collision clearance','UNVERIFIED (BROAD PHASE ONLY)']
+  ];
+  for(const [name,value] of metrics){
+    const line=document.createElement('div');line.className='metric';
+    const key=document.createElement('span'),data=document.createElement('strong');
+    key.textContent=name;data.textContent=value;line.append(key,data);reportBox.append(line);
+  }
+  for(const side of ARTICULATION_SIDES){
+    const leg=viability.legs?.[side];
+    if(!leg)continue;
+    const p=document.createElement('p');p.className='meta';
+    p.textContent=side.toUpperCase()+' / '+leg.variant.toUpperCase()+
+      ' · SHIN '+Math.round(leg.lowerLengthM*1000)+' mm · REACH +'+
+      Math.round(leg.extraReachM*1000)+' mm';
+    reportBox.append(p);
+  }
+  if(viability.walkPreview){
+    const p=document.createElement('p');p.className='meta';
+    p.textContent='Test gait: '+Math.round(viability.stride.stepDistanceM*100)+' cm step, '+
+      Math.round(viability.stride.liftM*100)+' cm lift';
+    reportBox.append(p);
+  }
+  if(viability.crouchReason&&!viability.fullCrouch){
+    const p=document.createElement('p');p.className='meta';
+    p.textContent='Full crouch limit: '+viability.crouchReason;reportBox.append(p);
+  }
+  panel.append(reportBox);
   const walk=button(poseAnimation?'STOP TWO-STEP DEMO':'TEST PLANTED TWO-STEP MOTION',()=>{
     if(poseAnimation){stopSweep(true);return;}
     startGuidedWalk();
@@ -484,14 +530,16 @@ function stopSweep(restore=true){
 }
 function startGuidedWalk(){
   if(poseAnimation||!labInspection(machine).mobility.complete)return;
+  const envelope=labMotionEnvelope(machine);
+  if(!envelope.ok){setMessage('Cannot step: '+envelope.reason,true);return;}
   const before={pose:labPose(machine),grounding:labGrounding(machine),
     manualPose:structuredClone(machine.labManualPose||labPose(machine))};
   const started=performance.now(),token=++animationToken;
-  poseAnimation={kind:'guided',request:0,before};
+  poseAnimation={kind:'guided',request:0,before,envelope};
   const tick=now=>{
     if(!poseAnimation||token!==animationToken)return;
     const t=Math.min(1,Math.max(0,(now-started)/3800));
-    const result=labGuidedWalkFrame(machine,t);
+    const result=labGuidedWalkFrame(machine,t,envelope);
     if(!result.ok){
       stopSweep(true);setMessage('Step preview stopped: '+result.reason,true);return;
     }
