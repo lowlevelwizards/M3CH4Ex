@@ -6,6 +6,7 @@ import {BY_ID} from './components.js';
 import {YARDWALKER_LAYOUT} from './mobilityDefinitions.js';
 import {rotatedY} from './assemblyGraph.js';
 import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,ACTUATOR_SPEC,currentPose} from './constructionArticulation.js';
+import {installedDevice,deviceBinding} from './constructionMechanisms.js';
 
 const RAD=Math.PI/180;
 const up=new THREE.Vector3(0,1,0);
@@ -97,11 +98,32 @@ function placeSegment(mesh,start,end){
   mesh.quaternion.setFromUnitVectors(up,direction.clone().normalize());
   mesh.scale.set(1,length,1);
 }
-export function createActiveActuator(side){
+export function createRotaryBearingVisual(def){
+  const root=new THREE.Group();
+  root.name=def.name+' / portable rotary hardware';
+  const structural=new THREE.MeshStandardMaterial({color:0x425b58,roughness:.63,metalness:.54,flatShading:true}),
+    face=new THREE.MeshStandardMaterial({color:def.variant==='wide'?0xcc8d43:0x75a19e,
+      roughness:.55,metalness:.49,flatShading:true});
+  const hub=new THREE.Mesh(new THREE.CylinderGeometry(def.diameterM/2,def.diameterM/2,.10,14),structural);
+  hub.rotation.z=Math.PI/2;root.add(hub);
+  for(const x of [-.052,.052]){
+    const plate=new THREE.Mesh(new THREE.CylinderGeometry(def.diameterM*.42,
+      def.diameterM*.42,.014,14),face);
+    plate.rotation.z=Math.PI/2;plate.position.x=x;root.add(plate);
+  }
+  for(const sx of [-1,1]){
+    const bolt=new THREE.Mesh(new THREE.CylinderGeometry(.024,.024,.022,8),structural);
+    bolt.rotation.z=Math.PI/2;bolt.position.set(sx*.066,0,0);
+    root.add(bolt);
+  }
+  root.userData={device:'rotary-bearing',mechanicalAxis:'x'};
+  return root;
+}
+export function createActiveActuator(side,def=null){
   const group=new THREE.Group();
   group.name=side.toUpperCase()+' articulated hydraulic actuator';
-  const housing=cylinder(.058,sharedMaterial.housing),
-    rod=cylinder(.029,sharedMaterial.rod),
+  const housing=cylinder((def?.diameterM||.116)/2,sharedMaterial.housing),
+    rod=cylinder((def?.diameterM||.116)/4,sharedMaterial.rod),
     upperCap=sphere(.074,sharedMaterial.joint),
     lowerCap=sphere(.065,sharedMaterial.joint);
   housing.name='fixed-pressure-housing';
@@ -110,7 +132,8 @@ export function createActiveActuator(side){
   lowerCap.name='shin-clevis';
   group.add(housing,rod,upperCap,lowerCap);
   group.userData={side,mechanism:'two-ended-telescoping-actuator',
-    housingLengthM:ACTUATOR_SPEC.housingLengthM};
+    housingLengthM:def?.stroke?.housing||ACTUATOR_SPEC.housingLengthM,
+    deviceSerial:null,mechanismId:def?.id};
   return {side,group,housing,rod,upperCap,lowerCap};
 }
 /** Geometric endpoints are evaluated on the *currently posed* thigh and shin.
@@ -125,22 +148,27 @@ export function updateActiveActuator(actuator,assembly,cache,graph,poseMap){
     return def?.assemblyRole==='anatomy'&&def.side===side&&def.section===role;
   });
   const thigh=section('thigh'),shin=section('shin');
-  if(!thigh||!shin||!cache.has(thigh.serial)||!cache.has(shin.serial)){
+  const device=installedDevice(assembly,side,'actuator');
+  if(!thigh||!shin||!cache.has(thigh.serial)||!cache.has(shin.serial)||
+    !device||!deviceBinding(assembly,side)){
     group.visible=false;return {visible:false};
   }
+  group.userData.deviceSerial=device.serial;
   const layout=YARDWALKER_LAYOUT.legs.find(l=>l.side===(side==='left'?-1:1));
   const upper=point(diff(layout.actuatorTop,layout.hip)).applyMatrix4(cache.get(thigh.serial).matrix);
+  const offset=device.definition.secondAnchorOffset||ACTUATOR_SPEC.lowerFromKnee;
   const lower=point([layout.side*ACTUATOR_SPEC.lowerOutboardM,
-    ACTUATOR_SPEC.lowerFromKnee[1],ACTUATOR_SPEC.lowerFromKnee[2]])
-    .applyMatrix4(cache.get(shin.serial).matrix);
+    offset[1],offset[2]]).applyMatrix4(cache.get(shin.serial).matrix);
   const vector=lower.clone().sub(upper),length=vector.length();
-  const housingEnd=upper.clone().addScaledVector(vector,Math.min(1,ACTUATOR_SPEC.housingLengthM/length));
+  const stroke=device.definition.stroke;
+  const housingEnd=upper.clone().addScaledVector(vector,Math.min(1,stroke.housing/length));
   placeSegment(housing,upper,housingEnd);
   placeSegment(rod,housingEnd,lower);
   upperCap.position.copy(upper);lowerCap.position.copy(lower);
   group.visible=true;
-  return {visible:true,lengthM:length,strokeM:length-ACTUATOR_SPEC.housingLengthM,
-    valid:length>=ACTUATOR_SPEC.minLengthM-.001&&length<=ACTUATOR_SPEC.maxLengthM+.001};
+  return {visible:true,lengthM:length,strokeM:length-stroke.housing,
+    valid:length>=stroke.min-.001&&length<=stroke.max+.001,
+    deviceSerial:device.serial};
 }
 /** Coarse broad-phase only. Joint contact volumes deliberately overlap,
  * so check the foot against the upper thigh, not two adjacent bearing sections.
