@@ -117,6 +117,24 @@ try{
  await leftLeg.getByRole('button',{name:'FULL'}).click();
  assert.deepEqual(errors,[],'Nested equipment and asymmetric limb browser errors');
  console.log('STAGE14_FORMS',JSON.stringify(selected));
+ await page.locator('[data-tab="audit"]').click();
+ const selections=page.locator('#audit-controls select');
+ assert.equal(await selections.count(),3,'Audit should expose family, part, coverage');
+ await selections.nth(0).selectOption('support');
+ await page.locator('#audit-controls select').nth(1).selectOption('support-arm-heavy');
+ await page.locator('#audit-controls select').nth(2).selectOption('2');
+ await page.getByRole('button',{name:'COMPARE ALL 3 COVERAGE LEVELS'}).click();
+ assert.equal(await page.locator('#audit-controls select').count(),2,
+  'Compare mode should show each coverage instead of separate selector');
+ assert.match(await page.locator('#audit-notes').innerText(),/HEAVY ARM/i);
+ await page.waitForTimeout(160);
+ assert.deepEqual(errors,[],'Stage 15 isolated arm audit browser errors');
+ await page.locator('[data-tab="reference"]').click();
+ await page.getByRole('button',{name:/08 \\/ COMPACT SCOUT/}).click();
+ await page.waitForTimeout(110);
+ assert.match(await page.locator('#assessment').innerText(),/Stubber is a compact biped/i);
+ assert.deepEqual(errors,[],'Stage 15 mobile reference framing errors');
+ console.log('STAGE15_AUDIT_BROWSER_OK');
  console.log('GRAYBOX_BROWSER_SMOKE_OK');
  console.log('BROWSER_SMOKE_OK');
 }finally{
