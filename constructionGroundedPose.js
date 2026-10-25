@@ -71,7 +71,10 @@ export function solveGroundedRig(grounding,{upperLowerForSide=null,strict=true}=
     const restY=upper[0]+lower[0],restZ=upper[1]+lower[1];
     const referenceY=mechanics?.referenceAnkleY??restY;
     const referenceZ=mechanics?.referenceAnkleZ??restZ;
-    const deltaY=referenceY-restY+grounding.bodyDropM+foot.y;
+    // An oversized stabilizer sole contacts the floor BELOW the ankle.
+    // Raise the ankle by the authored extra sole drop to keep that sole planted.
+    const deltaY=referenceY-restY+grounding.bodyDropM+foot.y+
+      (mechanics?.footContactDropM||0);
     const deltaZ=referenceZ-restZ+foot.z-grounding.bodyTravelZM;
     const solved=solveLegIK(upper,lower,deltaY,deltaZ);
     // Counter-rotation of the ankle leaves the sole close to its original pitch.
