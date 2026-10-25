@@ -6,6 +6,8 @@ import {FRAMES,CATALOG,BY_PART,PAINTS,RECIPES,defaultBuild,validSockets,
  install,addSupport,removeSupport,changeFrame,inspect,recipe,
  loadGraybox,exportGraybox,socketsForFrame} from './grayboxCore.js';
 import {buildGrayboxScene} from './grayboxVisual.js';
+import {HOUSINGS,CARRIERS,STANCES,FEET,DEFAULT_FORM} from './grayboxArchitecture.js';
+import {setForm} from './grayboxCore.js';
 const $=id=>document.getElementById(id);
 const STORAGE='m3ch4-graybox-v1';
 let model,activeCategory='frame',pending=null,socketVisible=false,paintTarget='all';
@@ -205,6 +207,32 @@ function renderChoices(){
 }
 function renderAppearance(){
  const root=$('appearance');root.replaceChildren();
+ const architecture=document.createElement('h3');
+ architecture.textContent='CONSTRUCTION ARRANGEMENT';root.append(architecture);
+ const note=document.createElement('p');note.className='subnote';
+ note.textContent='Change body shape, weapon carrier, stance and foot gear without replacing the five required stations.';
+ root.append(note);
+ for(const [key,options,label] of [
+  ['housing',HOUSINGS,'Body housing'],
+  ['carrier',CARRIERS,'Combat mount / arm'],
+  ['stance',STANCES,'Frame-to-hip stance'],
+  ['feet',FEET,'Ground-contact kit']]){
+  const field=document.createElement('label');
+  field.className='form-selector';field.textContent=label;
+  const picker=document.createElement('select');picker.dataset.form=key;
+  for(const opt of options){
+   const item=document.createElement('option');item.value=opt.id;item.textContent=opt.name;
+   picker.append(item);
+  }
+  picker.value=model.form?.[key]||DEFAULT_FORM[key];
+  picker.addEventListener('change',()=>{
+   const result=setForm(model,key,picker.value);
+   if(!result.ok){status(result.reason,true);return;}
+   save();refreshStage();buildAssessment();
+   status(label+' updated · '+options.find(x=>x.id===picker.value)?.name);
+  });
+  field.append(picker);root.append(field);
+ }
  const h=document.createElement('h3');h.textContent='PROTECTIVE COVERAGE';
  root.append(h);
  for(const cat of ['frame','cab','mobility','combat']){
@@ -255,9 +283,9 @@ function renderAppearance(){
   palette.append(b);
  }
  root.append(palette);
- const note=document.createElement('p');note.className='subnote';
- note.textContent='Same mechanical assemblies can have different protective coverage, surface finishes and accents.';
- root.append(note);
+ const footer=document.createElement('p');footer.className='subnote';
+ footer.textContent='This workshop previews geometry and mass/power consequences. New carriers, compact mobility and enclosures are not yet live combat hardware.';
+ root.append(footer);
 }
 function renderRecipes(){
  const root=$('recipes');root.replaceChildren();
