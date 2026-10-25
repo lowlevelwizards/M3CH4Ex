@@ -131,10 +131,14 @@ export function actuatorEndpoints(side,kneeAngle,assembly=null){
   const kneeRelative=thighDef?.sockets?.find(s=>s.id==='knee')?.position||
     sub(leg.knee,leg.hip);
   const drive=assembly?.owned&&installedDevice(assembly,side,'actuator');
-  const lowerOffset=drive?.definition.secondAnchorOffset||ACTUATOR_SPEC.lowerFromKnee;
-  const upper=sub(leg.actuatorTop,leg.hip);
-  const local=[leg.side*ACTUATOR_SPEC.lowerOutboardM,lowerOffset[1],lowerOffset[2]];
-  const lower=add(kneeRelative,rotatedX(local,kneeAngle));
+  const shin=assembly?.owned&&installedSection(assembly,side,'shin');
+  const shinDef=BY_ID.get(shin?.definitionId);
+  const lowerOffset=shinDef?.mechanical?.driveAnchors?.[drive?.definition.variant]||
+    [leg.side*ACTUATOR_SPEC.lowerOutboardM,
+      ACTUATOR_SPEC.lowerFromKnee[1],ACTUATOR_SPEC.lowerFromKnee[2]];
+  const upper=thighDef?.sockets?.find(s=>s.id==='drive-mount')?.position||
+    sub(leg.actuatorTop,leg.hip);
+  const lower=add(kneeRelative,rotatedX(lowerOffset,kneeAngle));
   return {upper,lower,lengthM:Math.hypot(...sub(lower,upper))};
 }
 export function actuatorStrokeCheck(side,angle,assembly=null){
