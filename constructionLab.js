@@ -672,6 +672,7 @@ function applyExplode(){
     if(!base)continue;
     marker.position.copy(new THREE.Vector3(...marker.userData.socketOffset).applyMatrix4(base.matrix));
     marker.position.y+=partGroup.position.y;
+    marker.position.z+=partGroup.position.z;
   }
   for(const actuator of actuators){
     const status=updateActiveActuator(actuator,machine,cache,graph,nodeWorldPoses);
