@@ -111,7 +111,7 @@ export function createActiveActuator(side){
   group.add(housing,rod,upperCap,lowerCap);
   group.userData={side,mechanism:'two-ended-telescoping-actuator',
     housingLengthM:ACTUATOR_SPEC.housingLengthM};
-  return {group,housing,rod,upperCap,lowerCap};
+  return {side,group,housing,rod,upperCap,lowerCap};
 }
 /** Geometric endpoints are evaluated on the *currently posed* thigh and shin.
  * This mechanism is intentionally excluded from the service-parts inventory
