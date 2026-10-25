@@ -30,6 +30,8 @@ for(const side of LEG_SIDES){
   }
   const parent=BY_ID.get('legs-yard');
   if(!parent)throw new Error('Yardwalker carrier missing');
+  parent.includedChildMassKg=YARD_LEG_KG*2;
+  parent.carriageMassKg=YARD_CARRIAGE_KG;
   if(!parent.sockets.some(s=>s.id===YARD_SOCKET_IDS[side]))
     parent.sockets.push({
       id:YARD_SOCKET_IDS[side],standard:YARD_LEG_MOUNT,roleHint:'limb',
