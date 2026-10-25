@@ -241,7 +241,14 @@ function makeProxy(def){
 }
 function makeVisual(def){
   const actual=buildPartVisual(def.id,{mode:'preview'});
-  if(actual)return actual;
+  if(actual){
+    // The imported visual kit includes a hidden full-envelope audit wire.
+    // It is useful in chassis audits but falsely enlarges bounds after one
+    // physical leg is detached. The lab computes bounds from real meshes.
+    const debug=actual.userData.outline;
+    if(debug){debug.parent?.remove(debug);debug.geometry?.dispose?.();delete actual.userData.outline;}
+    return actual;
+  }
   if(def.id==='power-dynamo'){
     const fixture=fitFixtureFor(def.id);
     if(fixture)return buildFitFixture(fixture);
