@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#f4f5f2"/>
   <title>M3CH4 / Universal Construction Lab</title>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
-  <link rel="stylesheet" href="./constructionLab.css?v=s07"/>
+  <link rel="stylesheet" href="./constructionLab.css?v=s08"/>
 </head>
 <body>
   <header class="topbar">
-    <div><div class="eyebrow">M3CH4 / EXPERIMENT</div><h1>CONSTRUCTION LAB <span>STAGE 07</span></h1></div>
+    <div><div class="eyebrow">M3CH4 / EXPERIMENT</div><h1>CONSTRUCTION LAB <span>STAGE 08</span></h1></div>
     <div class="top-actions">
       <button id="reset" type="button" title="Restore a stock test rig">Reset rig</button>
       <a href="https://lowlevelwizards.github.io/M3CH4/" title="Open the production game">LIVE M3CH4 ↗</a>
@@ -38,9 +38,10 @@
         <button data-tab="catalog" aria-pressed="true">CATALOGUE</button>
         <button data-tab="tree" aria-pressed="false">ASSEMBLY</button>
         <button data-tab="inspect" aria-pressed="false">INSPECT</button>
+        <button data-tab="pose" aria-pressed="false">POSE</button>
       </div>
       <section id="catalog-panel" class="panel">
-        <p class="explain">Select MOBILITY to inspect the six-part Yardwalker legs or swap the Rook S2 shin. Every component remains owned when detached.</p>
+        <p class="explain">Select POSE to flex the real joints, inspect hydraulic stroke and try stance presets. MOBILITY still supports the Rook S2 shin swap.</p>
         <div id="slots" class="slot-row" aria-label="Assembly type"></div>
         <div id="catalog" class="catalog-list"></div>
       </section>
@@ -52,6 +53,10 @@
       <section id="inspect-panel" class="panel" hidden>
         <div id="inspection"></div>
       </section>
+      <section id="pose-panel" class="panel" hidden>
+        <p class="explain">Mechanical joint laboratory: pose each hip, knee and ankle independently. The knee actuator follows two physical attachment points.</p>
+        <div id="pose-controls"></div>
+      </section>
       <footer class="sidebar-foot">
         <div id="stats"></div>
         <div id="verdict" role="status" aria-live="polite"></div>
@@ -60,6 +65,6 @@
       </footer>
     </aside>
   </main>
-  <script type="module" src="./constructionLab.js?v=s07"></script>
+  <script type="module" src="./constructionLab.js?v=s08"></script>
 </body>
 </html>
