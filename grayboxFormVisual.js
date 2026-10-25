@@ -165,3 +165,30 @@ export function buildFrameRiser(frameBounds,drop,paint){
  }
  return g;
 }
+
+/** Independent bolt-on limb shells, preserving actual shared mobility meshes.
+ * Does not imply arbitrary left/right locomotion replacements in live gameplay.
+ */
+export function buildIndependentLegPlating(limbPlating={},bounds,paint,overrides={}){
+ const g=new THREE.Group(),b=bounds,d=b.getSize(new THREE.Vector3());
+ for(const [side,sign] of [['left',-1],['right',1]]){
+  const level=limbPlating[side]||0;if(!level)continue;
+  const color=overrides['leg-'+side]||paint.main,
+   shell=material(color),dark=material(paint.secondary,.42);
+  const x=sign*Math.min(d.x*.28,.82),z=b.min.z+d.z*.50;
+  // Two separate serviceable subassemblies: thigh and shin coverage.
+  box(g,side+' independent thigh armor',
+   [x,b.max.y-d.y*.28,z-.11],
+   [Math.max(.23,d.x*.15),Math.max(.21,d.y*.26),.23],shell);
+  box(g,side+' thigh bearing band',
+   [x,b.max.y-d.y*.45,z-.09],[.27,.10,.24],dark);
+  if(level>=2){
+   box(g,side+' independent shin armor',
+    [x,b.min.y+d.y*.33,z-.08],
+    [.28,Math.max(.24,d.y*.24),.26],shell);
+   box(g,side+' replaceable ankle cuff',
+    [x,b.min.y+d.y*.16,z-.08],[.30,.11,.30],dark);
+  }
+ }
+ return g;
+}
