@@ -213,12 +213,15 @@ export function inspect(state){
  const housing=fromId(HOUSINGS,form.housing),carrier=fromId(CARRIERS,form.carrier);
  const totalMass=baseMass+armorMass+housing.mass+carrier.mass;
  const available=all.find(x=>POWER.includes(x))?.draw||0;
- const consumption=-all.filter(x=>x.draw<0).reduce((n,x)=>n+x.draw,0)-carrier.draw;
+ // Arm actuators are not drawing continuously in a static workshop pose.
+ // Record peak motion draw separately; never pretend a pose preview drives a servo.
+ const consumption=-all.filter(x=>x.draw<0).reduce((n,x)=>n+x.draw,0);
+ const carrierPeakKw=-carrier.draw;
  if(totalMass>frame.capacity)issues.push('FRAME OVERLOAD: '+Math.round(totalMass-frame.capacity)+' kg');
  if(available<consumption)issues.push('POWER SHORTFALL: '+(consumption-available)+' kW');
  const experimental=['mobility-quad-gb','mobility-low-gb'].includes(state.installed.mobility?.id);
  return {valid:issues.length===0,issues,mass:totalMass,capacity:frame.capacity,
-  powerAvailable:available,powerDraw:consumption,
+  powerAvailable:available,powerDraw:consumption,carrierPeakKw,
   experimental,complete:MANDATORY.every(k=>k==='frame'||!!state.installed[k])};
 }
 export const PAINTS=Object.freeze({
