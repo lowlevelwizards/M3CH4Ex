@@ -271,6 +271,7 @@ function renderInspection(){
       ?'Supports '+descendants.map(n=>n.name).join(', ')+'. Removing this part requires a dependency-aware operation.'
       :'This section has no attached children.';
     card.append(note);
+    if(ARTICULATION_JOINTS.includes(section))jointControl(side,section,card);
     if(section==='shin'){
       const alternative=selectedSection.variant==='original'?'rook':'original';
       const replace=button('REPLACE SHIN → '+(alternative==='rook'?'ROOK S2 SPAR':'ORIGINAL YARDWALKER'),
@@ -332,10 +333,141 @@ function renderInspection(){
   info.textContent='Stage 07: genuine nested Yardwalker anatomy with serviceable shins. All removals are checked for supported components. Kestrel, Hauler and free-form mounts remain outside this stage.';
   inspect.append(info);
 }
+/** A joint belongs to the bearing, not to the meshes being rotated.
+ * The hip drives the thigh branch, knee the shin branch and ankle the foot.
+ */
+function jointControl(side,joint,container){
+  const limits=JOINT_LIMITS[joint];
+  const card=document.createElement('div');card.className='joint-control';
+  const heading=document.createElement('div');heading.className='metric';
+  const title=document.createElement('strong'),value=document.createElement('strong');
+  title.textContent=side.toUpperCase()+' / '+joint.toUpperCase();
+  value.dataset.poseValue=side+':'+joint;
+  value.textContent=labPose(machine)[side+':'+joint]+'°';
+  heading.append(title,value);card.append(heading);
+  const slider=document.createElement('input');slider.type='range';
+  slider.min=String(limits.min);slider.max=String(limits.max);
+  slider.value=String(labPose(machine)[side+':'+joint]);slider.step='1';
+  slider.dataset.poseSlider=side+':'+joint;
+  const exists=labSectionDetails(machine).find(x=>x.side===side)?.sections?.[joint]?.installed;
+  slider.disabled=!exists;slider.setAttribute('aria-label',side+' '+joint+' mechanical joint');
+  slider.addEventListener('input',()=>{
+    stopSweep(false);
+    const next=Number(slider.value);
+    const result=labJointAction(machine,side,joint,next);
+    if(!result.ok){setMessage(result.reason,true);slider.value=String(labPose(machine)[side+':'+joint]);return;}
+    applyExplode();
+    setMessage(side+' '+joint+' = '+next+'° · one-axis mechanical pose');
+  });
+  card.append(slider);
+  const note=document.createElement('p');note.className='meta';
+  note.textContent=limits.min+'° → '+limits.max+'° · '+limits.description;
+  card.append(note);
+  container.append(card);
+}
+function updatePoseDiagnostics(){
+  const pose=labPose(machine);
+  document.querySelectorAll('[data-pose-value]').forEach(el=>{
+    const key=el.dataset.poseValue;
+    el.textContent=pose[key]+'°';
+  });
+  document.querySelectorAll('[data-pose-slider]').forEach(el=>{
+    if(document.activeElement!==el)el.value=String(pose[el.dataset.poseSlider]||0);
+  });
+  const panel=$('pose-diagnostics');
+  if(!panel)return;
+  panel.replaceChildren();
+  const report=articulationReport(machine);
+  const headline=document.createElement('h2');headline.textContent='MECHANICAL STATUS';panel.append(headline);
+  for(const item of report.stroke){
+    const line=document.createElement('div');line.className='metric';
+    const a=document.createElement('span'),b=document.createElement('strong');
+    a.textContent=item.side.toUpperCase()+' hydraulic stroke';
+    b.textContent=Math.round(item.extensionM*1000)+' mm · '+(item.valid?'IN RANGE':'OUT OF RANGE');
+    b.style.color=item.valid?'#4e7c67':'#b44736';line.append(a,b);panel.append(line);
+  }
+  const note=document.createElement('p');note.className='meta';
+  note.textContent=clearance.warnings.length
+    ?'COARSE CLEARANCE WARNINGS: '+clearance.warnings.join('; ')
+    :'Coarse non-adjacent foot/thigh boxes: no overlap detected';
+  panel.append(note);
+  const caveat=document.createElement('p');caveat.className='meta';
+  caveat.textContent='Clearance checks are conservative AABB hints, not exact swept-geometry collision, balance or walking simulation.';
+  panel.append(caveat);
+}
+function renderPosePanel(){
+  const panel=$('pose-controls');
+  if(!panel)return;
+  panel.replaceChildren();
+  const intro=document.createElement('section');intro.className='card';
+  const h=document.createElement('h2');h.textContent='POSE PRESETS';intro.append(h);
+  const row=document.createElement('div');row.className='pose-presets';
+  const titles={neutral:'NEUTRAL',crouch:'CROUCH','step-left':'STEP L','step-right':'STEP R',asymmetric:'ASYMMETRIC'};
+  for(const preset of PRESET_NAMES){
+    const b=button(titles[preset],()=>{
+      stopSweep(false);
+      const result=labPosePreset(machine,preset);
+      if(!result.ok){setMessage(result.reason,true);return;}
+      applyExplode();renderPosePanel();
+      setMessage('Mechanical pose · '+titles[preset]);
+    });
+    row.append(b);
+  }
+  intro.append(row);
+  const sweep=button(poseAnimation?'STOP MOTION TEST':'TEST BOTH KNEES THROUGH STROKE',()=>{
+    if(poseAnimation){stopSweep(true);return;}
+    startSweep();
+  });
+  sweep.style.width='100%';sweep.style.marginTop='10px';intro.append(sweep);
+  panel.append(intro);
+  for(const side of ARTICULATION_SIDES){
+    const group=document.createElement('section');group.className='card';
+    const h=document.createElement('h2');h.textContent=side.toUpperCase()+' LEG · HINGE AXES';group.append(h);
+    for(const joint of ARTICULATION_JOINTS)jointControl(side,joint,group);
+    panel.append(group);
+  }
+  const diagnostics=document.createElement('section');
+  diagnostics.className='card';diagnostics.id='pose-diagnostics';panel.append(diagnostics);
+  updatePoseDiagnostics();
+}
+function stopSweep(restore=true){
+  if(!poseAnimation)return;
+  const prior=poseAnimation;
+  cancelAnimationFrame(prior.request);
+  poseAnimation=null;animationToken++;
+  if(restore){
+    for(const side of ARTICULATION_SIDES)
+      labJointAction(machine,side,'knee',prior.initial[side]);
+    applyExplode();
+  }
+  renderPosePanel();
+}
+function startSweep(){
+  if(poseAnimation||!labInspection(machine).mobility.complete)return;
+  const initial=Object.fromEntries(ARTICULATION_SIDES.map(side=>[side,labPose(machine)[side+':knee']]));
+  const token=++animationToken,started=performance.now();
+  poseAnimation={initial,request:0};
+  const tick=now=>{
+    if(!poseAnimation||token!==animationToken)return;
+    const elapsed=Math.max(0,now-started),duration=2600;
+    const progress=Math.min(1,elapsed/duration);
+    const angle=Math.round(90*Math.sin(progress*Math.PI)**2);
+    for(const side of ARTICULATION_SIDES)labJointAction(machine,side,'knee',angle);
+    applyExplode();
+    if(progress<1)poseAnimation.request=requestAnimationFrame(tick);
+    else{
+      for(const side of ARTICULATION_SIDES)labJointAction(machine,side,'knee',initial[side]);
+      poseAnimation=null;applyExplode();renderPosePanel();
+      setMessage('Two-knee motion sweep complete · original pose restored');
+    }
+  };
+  renderPosePanel();
+  poseAnimation.request=requestAnimationFrame(tick);
+}
 function switchTab(which){
   currentTab=which;
   document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===which)));
-  for(const tab of ['catalog','tree','inspect'])$(tab+'-panel').hidden=which!==tab;
+  for(const tab of ['catalog','tree','inspect','pose'])$(tab+'-panel').hidden=which!==tab;
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 function makeProxy(def){
