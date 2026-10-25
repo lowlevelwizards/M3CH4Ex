@@ -195,7 +195,11 @@ export function actualAnatomyMass(assembly){
 export function rigAnatomyMass(assembly,rawMassKg){
   if(!yardLegSupported(assembly))return rawMassKg;
   // The pre-existing published 1240 kg includes two 500 kg original legs.
-  return rawMassKg-2*YARD_LEG_KG+actualAnatomyMass(assembly);
+  const deviceMass=Object.values(assemblyGraph(assembly).nodes).reduce((total,node)=>{
+    const def=BY_ID.get(node.definitionId);
+    return total+(def?.assemblyRole==='mechanism'?def.massKg:0);
+  },0);
+  return rawMassKg-2*YARD_LEG_KG+actualAnatomyMass(assembly)+deviceMass;
 }
 function transaction(assembly,runner){
   const snapshot=structuredClone(assembly);
@@ -268,7 +272,8 @@ export function detachAnatomyBranch(assembly,side,section,{cascade=false}={}){
       'Supports '+(subset.length-1)+' child assemblies. Remove them first or choose detach with dependents.');
     const removal=proposeRemoval(graph,node.serial,{cascade});
     if(!removal.ok)throw new Error(removal.reason);
-    stow(assembly,node.serial,subset);
+    stow(assembly,node.serial,subset.filter(n=>
+      BY_ID.get(n.definitionId)?.assemblyRole!=='mechanism'));
     assembly.graph=removal.graph;
     return {side,section,detached:subset.map(n=>n.serial)};
   });
@@ -331,7 +336,8 @@ export function detachWholeLeg(assembly,side){
     const subset=descendants(g,leg.serial);
     const out=proposeRemoval(g,leg.serial,{cascade:true});
     if(!out.ok)throw new Error(out.reason);
-    stow(assembly,leg.serial,subset);
+    stow(assembly,leg.serial,subset.filter(n=>
+      BY_ID.get(n.definitionId)?.assemblyRole!=='mechanism'));
     assembly.graph=out.graph;
     return {detached:out.detached};
   });
