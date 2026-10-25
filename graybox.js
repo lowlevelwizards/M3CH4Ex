@@ -6,7 +6,7 @@ import {FRAMES,CATALOG,BY_PART,PAINTS,RECIPES,defaultBuild,validSockets,
  install,addSupport,removeSupport,changeFrame,inspect,recipe,
  loadGraybox,exportGraybox,socketsForFrame} from './grayboxCore.js';
 import {buildGrayboxScene} from './grayboxVisual.js';
-import {planTestYardDeployment,storeTestYardDeployment} from './grayboxDeployment.js';
+import {createConstructorYard} from './constructorYard.js';
 import {AUDIT_CATEGORIES,buildAuditScene,auditText} from './grayboxAudit.js';
 import {HOUSINGS,CARRIERS,STANCES,FEET,DEFAULT_FORM} from './grayboxArchitecture.js';
 import {setForm,setLimbPlating} from './grayboxCore.js';
@@ -19,7 +19,7 @@ try{model=loadGraybox(JSON.parse(localStorage.getItem(STORAGE)||'null'));}
 catch{model=defaultBuild();}
 const stage=$('gb-viewport'),scene=new THREE.Scene();
 scene.background=new THREE.Color('#f4f6f3');
-const camera=new THREE.PerspectiveCamera(42,1,.08,75);
+const camera=new THREE.PerspectiveCamera(42,1,.12,180);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.6));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -36,7 +36,9 @@ grid.position.y=-.035;grid.material.transparent=true;grid.material.opacity=.28;s
 const focus=new THREE.Vector3(0,1.85,0);
 let azimuth=-.7,elevation=.24,distance=7.2,body=null,liveSockets=[];
 let currentView='quarter',userZoom=false,measuredFit=null;
+let yard=null;
 function updateCamera(){
+ if(yard?.piloting){yard.positionCamera();return;}
  elevation=Math.max(-.30,Math.min(1.45,elevation));
  camera.position.copy(focus).add(new THREE.Vector3(
   Math.sin(azimuth)*Math.cos(elevation)*distance,
@@ -53,7 +55,7 @@ function setView(which){
  [azimuth,elevation]=poses[which];framePreview();
 }
 function framePreview(){
- if(!body)return;
+ if(yard?.piloting||!body)return;
  const bounds=new THREE.Box3().setFromObject(body,true);
  if(bounds.isEmpty())return;
  const size=bounds.getSize(new THREE.Vector3());
@@ -88,7 +90,9 @@ function refreshStage(){
    buildGrayboxScene(model,{socketVisible,
      highlightCategory:pending?.category,highlightPart:pending?.id});
  body=result.root;liveSockets=result.sockets;measuredFit=result.fit||null;
- scene.add(body);framePreview();buildAssessment();
+ scene.add(body);
+ yard?.setRig(body,result.objects||[]);
+ framePreview();buildAssessment();
 }
 function button(label,callback,options={}){
  const b=document.createElement('button');b.type='button';
@@ -411,17 +415,20 @@ $('reset').addEventListener('click',()=>{
  status('Stock graybox rig restored');
 });
 $('deploy').addEventListener('click',()=>{
- const plan=planTestYardDeployment(model);
- if(!plan.ok){status(plan.reason,true);return;}
- const replacements=plan.substitutions.map(s=>s.original+' → '+s.live);
- const notice='DEPLOY TO LIVE TEST YARD?\n\n'+
-  (replacements.length?'PROTOTYPE SUBSTITUTIONS:\n'+replacements.join('\n')+'\n\n':'')+
-  plan.notice+'\n\nYour complete experimental machine stays saved here.';
- if(!window.confirm(notice)){status('Deployment cancelled; constructor unchanged.');return;}
- try{
-  const url=storeTestYardDeployment(plan,window.localStorage);
-  window.location.assign(url);
- }catch(error){status('Could not hand off loadout: '+error.message,true);}
+ if(currentTab==='audit'){
+  document.querySelector('.tab[data-tab="parts"]').click();
+ }
+ const evaluation=inspect(model);
+ if(!evaluation.complete||!evaluation.valid){
+  status('Complete a load-rated, powered rig before piloting: '+evaluation.issues.join('; '),true);
+  return;
+ }
+ pending=null;socketVisible=false;
+ // Refresh out of the audit and socket-marker views before piloting. This
+ // exact same new full-mesh object is then kept while locomoting.
+ refreshStage();
+ const ready=yard.launch();
+ if(!ready){status('The constructed rig did not initialize.',true);return;}
 });
 $('export').addEventListener('click',()=>{
  try{
@@ -450,12 +457,13 @@ function center(){
  return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,spread:Math.hypot(a.x-b.x,a.y-b.y)};
 }
 stage.addEventListener('pointerdown',e=>{
- if(e.target!==renderer.domElement)return;
+ if(yard?.piloting||e.target!==renderer.domElement)return;
  stage.setPointerCapture(e.pointerId);
  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false});
  if(pointers.size===2)pinch=center();
 });
 stage.addEventListener('pointermove',e=>{
+ if(yard?.piloting)return;
  const p=pointers.get(e.pointerId);if(!p)return;
  const dx=e.clientX-p.x,dy=e.clientY-p.y;
  p.x=e.clientX;p.y=e.clientY;
@@ -470,6 +478,7 @@ stage.addEventListener('pointermove',e=>{
  updateCamera();
 });
 stage.addEventListener('pointerup',e=>{
+ if(yard?.piloting)return;
  const p=pointers.get(e.pointerId);
  if(p&&!p.moved&&pending&&pointers.size===1){
   const rect=stage.getBoundingClientRect();
@@ -488,6 +497,7 @@ stage.addEventListener('pointerup',e=>{
 });
 stage.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);pinch=null;});
 stage.addEventListener('wheel',e=>{
+ if(yard?.piloting)return;
  e.preventDefault();userZoom=true;
  distance=Math.min(16,Math.max(3,distance*Math.exp(e.deltaY*.001)));
  updateCamera();
@@ -498,5 +508,15 @@ function resize(){
  camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);
 }
 new ResizeObserver(resize).observe(stage);
-function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);}
-renderPanels();refreshStage();resize();animate();
+yard=createConstructorYard({scene,camera,stage,onMessage:message=>{
+ if(!yard?.piloting)status(message);
+}});
+floor.visible=false;grid.visible=false;
+let lastFrame=performance.now();
+function animate(now){
+ requestAnimationFrame(animate);
+ const dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000||0));lastFrame=now;
+ yard.step(dt,model.installed.mobility?.id);
+ renderer.render(scene,camera);
+}
+renderPanels();refreshStage();resize();requestAnimationFrame(animate);
