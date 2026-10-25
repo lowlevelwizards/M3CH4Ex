@@ -99,7 +99,7 @@ export function fits(part,socket){
 }
 function used(state,socket,except){
  return Object.entries(state.installed).some(([category,m])=>category!==except&&m?.socket===socket) ||
-   (except!=='support'&&Boolean(state.support[socket]));
+   Boolean(state.support[socket]);
 }
 export function validSockets(state,category,id){
  const part=categoryPart(category,id);
