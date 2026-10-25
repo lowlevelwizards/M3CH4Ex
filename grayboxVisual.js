@@ -27,7 +27,11 @@ const sphere=(g,p,r,m,name='')=>{
  const o=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),m);
  o.position.set(...p);o.name=name;g.add(o);return o;
 };
-const toColor=(hex,factor)=>new THREE.Color(hex).multiplyScalar(factor);
+const localMat=(...args)=>{
+ const material=mat(...args);
+ material.userData.grayboxOwned=true;
+ return material;
+};
 function tag(parent,text,color='#b59f66'){
  const canvas=typeof document!=='undefined'?document.createElement('canvas'):null;
  if(!canvas)return;
@@ -40,7 +44,7 @@ function tag(parent,text,color='#b59f66'){
  plane.position.set(0,.30,-.43);parent.add(plane);
 }
 function frameVisual(frame,paint,armor){
- const g=new THREE.Group(),[w,h,d]=frame.size,metal=mat(paint.secondary),main=mat(paint.main);
+ const g=new THREE.Group(),[w,h,d]=frame.size,metal=localMat(paint.secondary),main=localMat(paint.main);
  if(frame.shape==='open'){
   for(const x of [-w*.40,w*.40])cylinder(g,[x,-h*.42,0],[x,h*.45,0],.065,DARK);
   cylinder(g,[-w*.48,h*.29,0],[w*.48,h*.29,0],.09,metal);
@@ -82,7 +86,7 @@ function frameVisual(frame,paint,armor){
  return g;
 }
 function cabVisual(part,paint,armor){
- const g=new THREE.Group(),main=mat(paint.main),metal=mat(paint.secondary);
+ const g=new THREE.Group(),main=localMat(paint.main),metal=localMat(paint.secondary);
  if(part.form==='glass'){
   box(g,[0,0,.01],[.99,.57,.92],metal);
   const screen=box(g,[0,.11,-.49],[.79,.44,.055],GLASS);
@@ -145,7 +149,7 @@ function legPair(g,form,primary,secondary,armor){
  }
 }
 function mobilityVisual(part,paint,armor){
- const g=new THREE.Group(),primary=mat(paint.main),secondary=mat(paint.secondary);
+ const g=new THREE.Group(),primary=localMat(paint.main),secondary=localMat(paint.secondary);
  if(part.form!=='quad'){legPair(g,part.form,primary,secondary,armor);return g;}
  // Crawler: one square load deck and four equal independent outboard legs.
  // Greybox only; do not claim this has a fourth live locomotion solver.
@@ -174,7 +178,7 @@ function mobilityVisual(part,paint,armor){
  return g;
 }
 function weaponVisual(part,paint,armor){
- const g=new THREE.Group(),primary=mat(paint.main),secondary=mat(paint.secondary);
+ const g=new THREE.Group(),primary=localMat(paint.main),secondary=localMat(paint.secondary);
  box(g,[0,0,.13],[.49,.39,.72],secondary);
  if(part.form==='rotary'){
   for(let i=0;i<6;i++){
@@ -198,7 +202,7 @@ function weaponVisual(part,paint,armor){
  return g;
 }
 function powerVisual(part,paint){
- const g=new THREE.Group(),main=mat(paint.secondary),primary=mat(paint.main);
+ const g=new THREE.Group(),main=localMat(paint.secondary),primary=localMat(paint.main);
  const size=part.form==='heavy'?[1.05,.81,.82]:
   part.form==='light'?[.71,.85,.62]:[.84,.66,.75];
  box(g,[0,0,0],size,main,'generator cast pressure case');
@@ -225,7 +229,7 @@ function powerVisual(part,paint){
  return g;
 }
 function supportVisual(part,paint){
- const g=new THREE.Group(),main=mat(paint.main),secondary=mat(paint.secondary);
+ const g=new THREE.Group(),main=localMat(paint.main),secondary=localMat(paint.secondary);
  switch(part.form){
   case 'arm': {
    // Reuse the Stage 11 machined load members, not the previous three
@@ -263,7 +267,7 @@ function supportVisual(part,paint){
    break;
   case 'light':
    cylinder(g,[0,0,0],[0,.64,0],.037,DARK);
-   sphere(g,[0,.68,0],.13,mat('#ebb05b',.05,.85));
+   sphere(g,[0,.68,0],.13,localMat('#ebb05b',.05,.85));
    break;
  }
  // Standardized physical attachment base, irrespective of its task.
@@ -349,8 +353,8 @@ export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=n
   const pos=physical.get(socket.id),world=[pos[0],pos[1]+frameY,pos[2]];
   if(socketVisible||highlightCategory===socket.station){
    const glyph=sphere(root,world,highlightCategory===socket.station?.095:.055,
-    highlightCategory===socket.station?mat('#d3a34b',.15,.90):
-      mat('#97a49a',.13,.76),'socket-'+socket.id);
+    highlightCategory===socket.station?localMat('#d3a34b',.15,.90):
+      localMat('#97a49a',.13,.76),'socket-'+socket.id);
    glyph.userData.socket=socket.id;sockets.push({mesh:glyph,socket});
   }
  }
