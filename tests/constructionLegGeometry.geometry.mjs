@@ -1,4 +1,5 @@
-import {createLabMachine,labJointAction,labSectionAction,labInspection,labSectionDetails} from '../constructionLabCore.js';
+import {createLabMachine,labJointAction,labSectionAction,labInspection,labSectionDetails,
+  labAssistedPreset,labGrounding,labGuidedWalkFrame} from '../constructionLabCore.js';
 import {BY_ID,graphWorldPoses} from '../components.js';
 import {calculateArticulatedMatrices,createActiveActuator,updateActiveActuator} from '../constructionArticulationVisual.js';
 import test from 'node:test';
@@ -147,5 +148,62 @@ test('Stage 08 two-end hydraulic actuators stay on actual thigh and shin mounts'
     assert.ok(Math.abs(actuator.housing.scale.y-.34)<1e-6);
     assert.ok(Math.abs(actuator.rod.scale.y-update.strokeM)<1e-6);
     assert.equal(actuator.group.children.length,4);
+  }
+});
+
+function ankleWorld(machine,side){
+  const geometry=activeGeometry(machine);
+  const part=labSectionDetails(machine).find(l=>l.side===side).sections.ankle;
+  const position=new THREE.Vector3().setFromMatrixPosition(geometry.matrix.get(part.serial).matrix);
+  const grounding=labGrounding(machine);
+  if(grounding.mode==='grounded'){
+    position.y-=grounding.bodyDropM;
+    position.z+=grounding.bodyTravelZM;
+  }
+  return position;
+}
+test('08D crouch lowers the chassis while both foot joints retain their world anchors',()=>{
+  for(const variant of ['original','rook']){
+    const rig=createLabMachine();
+    if(variant==='rook')assert.equal(labSectionAction(rig,'left','shin','swap',{variant}).ok,true);
+    const rest={left:ankleWorld(rig,'left'),right:ankleWorld(rig,'right')};
+    const posed=labAssistedPreset(rig,'crouch');
+    assert.equal(posed.ok,true,posed.reason);
+    for(const side of ['left','right']){
+      const after=ankleWorld(rig,side);
+      assert.ok(Math.abs(after.y-rest[side].y)<.002,side+' ankle should stay grounded while chassis drops');
+      assert.ok(Math.abs(after.z-rest[side].z)<.002,side+' ankle should retain world Z');
+    }
+    assert.equal(labGrounding(rig).bodyDropM,.15);
+  }
+});
+test('08D assisted one-foot step preserves the planted side and lifts the swing side',()=>{
+  const rig=createLabMachine();
+  const base={left:ankleWorld(rig,'left'),right:ankleWorld(rig,'right')};
+  const result=labAssistedPreset(rig,'step-left');
+  assert.equal(result.ok,true,result.reason);
+  const planted=ankleWorld(rig,'right'),swing=ankleWorld(rig,'left');
+  assert.ok(Math.abs(planted.y-base.right.y)<.003,'supporting ankle Y remains fixed');
+  assert.ok(Math.abs(planted.z-base.right.z)<.003,'supporting ankle Z remains fixed');
+  assert.ok(swing.y-base.left.y>.07,'swing ankle is visibly raised');
+  assert.ok(swing.z-base.left.z<-.16,'swing ankle advances forward');
+});
+test('08D two-step simulation pins supporting foot through both contact phases',()=>{
+  const rig=createLabMachine();
+  const original={left:ankleWorld(rig,'left'),right:ankleWorld(rig,'right')};
+  for(let i=0;i<=20;i++){
+    const t=i/20,r=labGuidedWalkFrame(rig,t);
+    assert.equal(r.ok,true,r.reason);
+    const g=labGrounding(rig);
+    if(g.feet.right.planted&&t<=.5){
+      const a=ankleWorld(rig,'right');
+      assert.ok(Math.abs(a.z-original.right.z)<.003,'right support anchor slid at t='+t);
+      assert.ok(Math.abs(a.y-original.right.y)<.003);
+    }
+    if(g.feet.left.planted&&t>=.55){
+      const a=ankleWorld(rig,'left');
+      assert.ok(Math.abs(a.z-(original.left.z-.25))<.003,'left landing anchor slid at t='+t);
+      assert.ok(Math.abs(a.y-original.left.y)<.003);
+    }
   }
 });
