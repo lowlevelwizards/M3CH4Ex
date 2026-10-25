@@ -130,7 +130,26 @@ export function labSectionAction(assembly,side,section,action,options={}){
     {cascade:!!options.cascade});
   if(action==='attach')return installAnatomyBranch(assembly,side,section,
     {variant:options.variant||'original'});
-  if(action==='swap'&&section==='shin')return swapShin(assembly,side,options.variant||'rook');
+  if(action==='swap'&&section==='shin'){
+    const snapshot=structuredClone(assembly);
+    const before=assembly.labGrounding?.mode==='grounded';
+    const result=swapShin(assembly,side,options.variant||'rook');
+    if(!result.ok)return result;
+    // Longer components can change which crouches are reachable. On a change
+    // involving Pylon or a prior guided pose, recompute a *real* grounded stance.
+    if(anatomyReadiness(assembly)&&
+       (options.variant==='extended'||before)){
+      const target=before&&snapshot.labGrounding?.bodyDropM>0?'crouch':'neutral';
+      const grounded=labAssistedPreset(assembly,target);
+      if(!grounded.ok){
+        Object.keys(assembly).forEach(key=>delete assembly[key]);
+        Object.assign(assembly,snapshot);
+        return {ok:false,reason:'Shin fits structurally but has no valid grounded stance: '+grounded.reason};
+      }
+      return {...result,grounded,stanceAdjusted:grounded.limited};
+    }
+    return result;
+  }
   return {ok:false,reason:'Unsupported anatomical operation'};
 }
 export function labJointAction(assembly,side,joint,degrees){
