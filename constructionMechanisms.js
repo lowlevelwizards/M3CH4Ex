@@ -212,8 +212,8 @@ export function mechanismValidation(assembly){
 }
 export function mechanismsForBlueprint(assembly){
  return Object.fromEntries(LEG_SIDES.map(side=>[side,{
-  bearing:installedDevice(assembly,side,'bearing')?.serial||null,
-  actuator:installedDevice(assembly,side,'actuator')?.serial||null,
+  bearing:assembly.labMechanisms?.[side]?.bearing||null,
+  actuator:assembly.labMechanisms?.[side]?.actuator||null,
   targetSerial:deviceBinding(assembly,side)?.targetSerial||null
  }]));
 }
@@ -236,10 +236,13 @@ export function restoreMechanisms(assembly,input){
       const def=BY_ID.get(owned?.definitionId);
       if(!def||def.device!==type)throw Error('Mechanism is unowned or wrong type');
       const parent=parentFor(assembly,side,type);
-      if(!parent)throw Error('Mechanism parent missing');
-      const attach=proposeAttachment(assembly,BY_ID,spec[type],parent.serial,socketFor(type));
-      if(!attach.ok)throw Error(attach.reason);
-      assembly.graph=attach.graph;
+      if(parent){
+        const attach=proposeAttachment(assembly,BY_ID,spec[type],parent.serial,socketFor(type));
+        if(!attach.ok)throw Error(attach.reason);
+        assembly.graph=attach.graph;
+      }
+      // A detached leg keeps its assigned hardware in owned inventory. The
+      // graph connection is restored when that physical branch is reinstalled.
       assembly.labMechanisms[side][type]=spec[type];
     }
    }
