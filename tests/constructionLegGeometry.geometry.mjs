@@ -6,7 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {buildPartVisual} from '../partVisuals.js';
-import {extractYardwalkerLeg,extractYardwalkerAnatomy,buildRookSparShin,buildPylonExtendedShin} from '../yardwalkerVisual.js';
+import {extractYardwalkerLeg,extractYardwalkerAnatomy,buildRookSparShin,
+  buildPylonExtendedShin,buildForgeCompactThigh,buildDockpadStabilizerFoot
+} from '../yardwalkerVisual.js';
 import {YARDWALKER_LAYOUT} from '../mobilityDefinitions.js';
 
 function boundsOf(object) {
@@ -274,4 +276,59 @@ test('08E extended side uses installed length IK through a reduced but continuou
       assert.ok(Math.abs(p.z-(neutral.left.z-envelope.stepDistanceM))<.004,'other contact slipped');
     }
   }
+});
+
+test('Stage 09 Forge thigh knee interface moves physical descendants by authored 75 mm',()=>{
+  for(const side of ['left','right']){
+    const rig=createLabMachine(),old=activeGeometry(rig);
+    const previous=labSectionDetails(rig).find(x=>x.side===side).sections;
+    const before=old.poses.get(previous.knee.serial).position;
+    const result=labSectionAction(rig,side,'thigh','swap',{variant:'compact'});
+    assert.equal(result.ok,true,result.reason);
+    const parts=labSectionDetails(rig).find(x=>x.side===side).sections;
+    const def=BY_ID.get(parts.thigh.id);
+    const model=buildForgeCompactThigh(side,def.mechanical.kneeReceiver);
+    const mount=model.getObjectByName('Forge-T2-knee-machined-receiver');
+    assert.ok(mount,'Real authored knee flange expected');
+    assert.ok(mount.position.distanceTo(new THREE.Vector3(...def.mechanical.kneeReceiver))<1e-6);
+    const next=activeGeometry(rig);
+    assert.ok(Math.abs(next.poses.get(parts.knee.serial).position[1]-before[1]-.075)<1e-6);
+    assert.equal(parts.knee.serial,previous.knee.serial);
+    assert.equal(parts.ankle.serial,previous.ankle.serial);
+  }
+});
+test('Stage 09 Dockpad foot has wider geometry and deeper sole contact datum',()=>{
+  const original=buildPartVisual('legs-yard',{mode:'preview'});
+  const section=extractYardwalkerAnatomy(extractYardwalkerLeg(original,'left'),'left');
+  const stockBox=boundsOf(section.foot);
+  const variant=buildDockpadStabilizerFoot('left',.04);
+  const dockBox=boundsOf(variant);
+  assert.ok(dockBox.max.x-dockBox.min.x>stockBox.max.x-stockBox.min.x+.10);
+  assert.ok(dockBox.max.z-dockBox.min.z>stockBox.max.z-stockBox.min.z+.10);
+  assert.equal(variant.userData.contactDropM,.04);
+  let count=0;variant.traverse(obj=>{if(obj.isMesh)count++});
+  assert.ok(count>=6,'Stabilizer is real separate pad, outriggers, heel and socket housing');
+});
+test('Stage 09 mixed-component stance grounds soles with unlike thigh/shin/foot interfaces',()=>{
+  const rig=createLabMachine(),reference={
+    left:ankleWorld(rig,'left'),right:ankleWorld(rig,'right')
+  };
+  for(const [section,variant] of [['thigh','compact'],['shin','extended'],['foot','stabilizer']]){
+    const res=labSectionAction(rig,'left',section,'swap',{variant});
+    assert.equal(res.ok,true,res.reason);
+  }
+  for(const name of ['neutral','crouch','step-right']){
+    const result=labAssistedPreset(rig,name);
+    assert.equal(result.ok,true,name+' '+result.reason);
+    const pose=labGrounding(rig),left=ankleWorld(rig,'left'),right=ankleWorld(rig,'right');
+    // In a grounded pose, the ankle is higher by the authored Dockpad contact
+    // depth, but the sole remains on the same real floor datum.
+    if(name==='neutral'||name==='crouch'){
+      assert.ok(Math.abs(left.y-.04-reference.left.y)<.004,'left Dockpad sole must be planted');
+      assert.ok(Math.abs(right.y-reference.right.y)<.004,'right work boot must be planted');
+      assert.ok(Math.abs(left.z-reference.left.z)<.004);
+    }
+  }
+  const body=labGrounding(rig).bodyDropM;
+  assert.ok(Number.isFinite(body));
 });
