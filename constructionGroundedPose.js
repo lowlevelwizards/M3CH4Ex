@@ -62,11 +62,18 @@ export function solveGroundedRig(grounding,{upperLowerForSide=null,strict=true}=
   const pose=neutralPose(),contacts=[];
   for(const side of ARTICULATION_SIDES){
     const leg=YARDWALKER_LAYOUT.legs.find(x=>x.side===(side==='left'?-1:1));
-    const upper=upperLowerForSide?.(side)?.upper||[leg.knee[1]-leg.hip[1],leg.knee[2]-leg.hip[2]];
-    const lower=upperLowerForSide?.(side)?.lower||[leg.ankle[1]-leg.knee[1],leg.ankle[2]-leg.knee[2]];
+    const mechanics=upperLowerForSide?.(side);
+    const upper=mechanics?.upper||[leg.knee[1]-leg.hip[1],leg.knee[2]-leg.hip[2]];
+    const lower=mechanics?.lower||[leg.ankle[1]-leg.knee[1],leg.ankle[2]-leg.knee[2]];
     const foot=grounding.feet[side];
-    // Foot world Z and ground Y are fixed while the body moves relative to it.
-    const solved=solveLegIK(upper,lower,grounding.bodyDropM+foot.y,foot.z-grounding.bodyTravelZM);
+    // Reference ankle ground plane is shared across unequal leg lengths.
+    // A long shin must *bend* to reach it; no virtual shortening/stretching.
+    const restY=upper[0]+lower[0],restZ=upper[1]+lower[1];
+    const referenceY=mechanics?.referenceAnkleY??restY;
+    const referenceZ=mechanics?.referenceAnkleZ??restZ;
+    const deltaY=referenceY-restY+grounding.bodyDropM+foot.y;
+    const deltaZ=referenceZ-restZ+foot.z-grounding.bodyTravelZM;
+    const solved=solveLegIK(upper,lower,deltaY,deltaZ);
     // Counter-rotation of the ankle leaves the sole close to its original pitch.
     // The original authored neutral pitch is preserved.
     pose[side+':hip']=round(solved.hip*RAD);
@@ -75,7 +82,9 @@ export function solveGroundedRig(grounding,{upperLowerForSide=null,strict=true}=
     if(!clampAngles(side,pose,strict))
       return {ok:false,reason:side+' foot target exceeds a joint limit'};
     contacts.push({side,planted:foot.planted,worldZ:foot.z,
-      groundY:foot.y,reachM:solved.reach});
+      groundY:foot.y,reachM:solved.reach,
+      upperLengthM:Math.hypot(...upper),lowerLengthM:Math.hypot(...lower),
+      referenceAnkleY:referenceY});
   }
   const limits=validatePose(pose);
   if(!limits.valid)return {ok:false,reason:limits.errors.join('; ')};
@@ -110,24 +119,24 @@ const smooth=t=>t*t*(3-2*t);
  * The supporting pad never chases the moving chassis. Each swing takes a
  * fixed launch/landing position and a clearance arc.
  */
-export function contactWalkFrame(t){
+export function contactWalkFrame(t,{liftM=.10,stepDistanceM=.25,bodyDropM=.04}={}){
   t=clamp(t,0,1);
   const g=groundedTargets('neutral');
-  g.bodyDropM=.04;
+  g.bodyDropM=bodyDropM;
   const step=(u,from,to)=>{
     const f=smooth(clamp(u,0,1));
-    return {z:round(from+(to-from)*f),y:round(Math.sin(Math.PI*f)*.10),
+    return {z:round(from+(to-from)*f),y:round(Math.sin(Math.PI*f)*liftM),
       planted:u<=0||u>=1};
   };
   if(t<.5){
     const u=t/.5;
-    g.bodyTravelZM=round(-.105*smooth(u));
-    g.feet.left=step(u,-0,-.25);
+    g.bodyTravelZM=round(-stepDistanceM*.42*smooth(u));
+    g.feet.left=step(u,0,-stepDistanceM);
   }else{
     const u=(t-.5)/.5;
-    g.bodyTravelZM=round(-.105-.12*smooth(u));
-    g.feet.left={z:-.25,y:0,planted:true};
-    g.feet.right=step(u,0,-.28);
+    g.bodyTravelZM=round(-stepDistanceM*.42-stepDistanceM*.48*smooth(u));
+    g.feet.left={z:-stepDistanceM,y:0,planted:true};
+    g.feet.right=step(u,0,-stepDistanceM*1.12);
   }
   return g;
 }
