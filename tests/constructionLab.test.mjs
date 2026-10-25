@@ -646,3 +646,45 @@ test('Stage 10 swapped shin rebinds physical linkage target to replacement branc
  assert.equal(now.linkage.targetSerial,labSectionDetails(rig)[0].sections.shin.serial);
  assert.equal(labInspection(rig).valid,true);
 });
+
+test('Stage 10 saved parked leg retains mechanism serial assignments when reinstalled',()=>{
+ const rig=createLabMachine();
+ assert.equal(labMechanismAction(rig,'right','actuator','install','travel').ok,true);
+ const before=labMechanismDetails(rig).right;
+ assert.equal(labLegAction(rig,'right','detach').ok,true);
+ const bp=labBlueprint(rig);
+ assert.equal(bp.mechanisms.right.actuator,before.actuator.serial);
+ assert.equal(bp.mechanisms.right.targetSerial,null);
+ const next=loadLabBlueprint(bp);
+ assert.deepEqual(labBlueprint(next),bp);
+ assert.equal(labLegAction(next,'right','attach').ok,true);
+ assert.equal(labMechanismDetails(next).right.actuator.serial,before.actuator.serial);
+ assert.equal(labMechanismDetails(next).right.bearing.serial,before.bearing.serial);
+ assert.equal(labInspection(next).valid,true);
+});
+test('Stage 10 structural links are application-neutral but still require physical child interfaces',()=>{
+ const upper=BY_ID.get('forge-t2-thigh-left');
+ const lower=BY_ID.get('pylon-l1-shin-left');
+ assert.equal(upper.mountInterface.kind,'structural-link');
+ assert.equal(lower.mountInterface.kind,'structural-link');
+ for(const role of ['thigh','forearm','upper-arm']){
+   assert.ok(upper.mountInterface.applications.includes(role));
+ }
+ const rig=createLabMachine(),part=rig.owned.find(x=>x.definitionId===lower.id);
+ const target=labSectionDetails(rig)[0].sections.thigh.serial;
+ const attempt=proposeComponentReplacement(rig,BY_ID,target,part.serial);
+ assert.equal(attempt.ok,false,'Structural mounting fits, but knee-supporting child port differs');
+});
+test('Stage 10 actuator endpoints originate from the actual compatible link definitions',()=>{
+ const rig=createLabMachine();
+ const first=labMechanismDetails(rig).left;
+ const thigh=BY_ID.get(labSectionDetails(rig)[0].sections.thigh.id);
+ const shin=BY_ID.get(labSectionDetails(rig)[0].sections.shin.id);
+ assert.deepEqual(first.linkage.fromLocal,
+   thigh.sockets.find(x=>x.id==='drive-mount').position);
+ assert.deepEqual(first.linkage.targetLocal,shin.mechanical.driveAnchors.utility);
+ assert.equal(labMechanismAction(rig,'left','actuator','install','travel').ok,true);
+ const second=labMechanismDetails(rig).left;
+ assert.deepEqual(second.linkage.targetLocal,shin.mechanical.driveAnchors.travel);
+ assert.notDeepEqual(second.linkage.targetLocal,first.linkage.targetLocal);
+});
