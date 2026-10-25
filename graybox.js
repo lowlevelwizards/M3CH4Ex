@@ -91,7 +91,7 @@ function refreshStage(){
      highlightCategory:pending?.category,highlightPart:pending?.id});
  body=result.root;liveSockets=result.sockets;measuredFit=result.fit||null;
  scene.add(body);
- yard?.setRig(body,result.objects||[]);
+ yard?.setRig(body,result.objects||[],model.installed.combat?.id);
  framePreview();buildAssessment();
 }
 function button(label,callback,options={}){
@@ -510,7 +510,7 @@ function resize(){
 new ResizeObserver(resize).observe(stage);
 yard=createConstructorYard({scene,camera,stage,onMessage:message=>{
  if(!yard?.piloting)status(message);
-}});
+},onGarage:()=>{userZoom=false;setView('quarter');}});
 floor.visible=false;grid.visible=false;
 let lastFrame=performance.now();
 function animate(now){
