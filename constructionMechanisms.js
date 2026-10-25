@@ -19,7 +19,7 @@ const RAW=[
   massKg:16,range:{min:-12,max:120,axis:'x'},diameterM:.32,
   description:'Reinforced rotary assembly with a wider allowable angular range. Usable at any matching rotational port.'},
  {id:'mechanism-actuator-utility',name:'P-48 Utility Linear Drive',device:'actuator',
-  massKg:14,stroke:{min:.43,max:.71,housing:.34},diameterM:.11,
+  massKg:14,stroke:{min:.48,max:.71,housing:.34},diameterM:.11,
   secondAnchorOffset:[0,-.23,.065],
   description:'Compact two-ended linear drive for matching anchor pairs, independent of a named limb.'},
  {id:'mechanism-actuator-travel',name:'P-70 Extended-Travel Drive',device:'actuator',
