@@ -142,8 +142,11 @@ export function labStowed(assembly){return partStowList(assembly);}
 export function labSectionAction(assembly,side,section,action,options={}){
   if(!LEG_SIDES.includes(side)||!ANATOMY_ORDER.includes(section))
     return {ok:false,reason:'Unknown anatomical section'};
-  if(action==='detach')return detachAnatomyBranch(assembly,side,section,
-    {cascade:!!options.cascade});
+  if(action==='detach'){
+    const result=detachAnatomyBranch(assembly,side,section,{cascade:!!options.cascade});
+    if(result.ok)refreshDeviceTarget(assembly,side);
+    return result;
+  }
   if(action==='attach'){
     const result=installAnatomyBranch(assembly,side,section,
       {variant:options.variant||'original'});
