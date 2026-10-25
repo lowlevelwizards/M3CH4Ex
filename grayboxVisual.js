@@ -263,6 +263,8 @@ function powerVisual(part,paint){
 function supportVisual(part,paint){
  const g=new THREE.Group(),main=localMat(paint.main),secondary=localMat(paint.secondary);
  switch(part.form){
+  case 'arm-light':
+  case 'arm-heavy':
   case 'arm': {
    // Reuse the Stage 11 machined load members, not the previous three
    // unsupported graybox cylinders. The graybox poses them as one STATIC
@@ -279,6 +281,13 @@ function supportVisual(part,paint){
    // The fingers are a single generic end-effector, not simulated hand bones.
    for(const sign of [-1,1])
     box(g,[sign*.145,-1.05,-.20],[.087,.23,.12],DARK,'service gripper jaw');
+   if(part.form==='arm-heavy'){
+    box(g,[0,-.32,-.17],[.40,.47,.23],main,'industrial upper-arm protection');
+    box(g,[0,-.77,-.20],[.34,.40,.25],main,'industrial forearm enclosure');
+    sphere(g,[0,-.60,-.03],.16,JOINT,'heavy elbow bearing');
+   }else if(part.form==='arm-light'){
+    g.scale.setScalar(.84);
+   }
    g.userData.grayboxVisualSource='stage11-linked-service-arm';
    break;
   }
