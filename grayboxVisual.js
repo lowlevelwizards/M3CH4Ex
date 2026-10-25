@@ -3,6 +3,7 @@
  */
 import * as THREE from 'three';
 import {BY_PART,socketsForFrame} from './grayboxCore.js';
+import {buildSharedVisual} from './grayboxSharedVisual.js';
 const mat=(color,metalness=.23,opacity=1)=>new THREE.MeshStandardMaterial({
  color,metalness,roughness:.76,flatShading:true,transparent:opacity<1,opacity,
  side:THREE.DoubleSide});
@@ -202,6 +203,8 @@ function supportVisual(part,paint){
  return g;
 }
 export function visualFor(type,part,paint,armor=0){
+ const source=buildSharedVisual(type,part.id,paint,armor);
+ if(source)return source;
  if(type==='frame')return frameVisual(part,paint,armor);
  if(type==='cab')return cabVisual(part,paint,armor);
  if(type==='mobility')return mobilityVisual(part,paint,armor);
@@ -209,45 +212,128 @@ export function visualFor(type,part,paint,armor=0){
  if(type==='power')return powerVisual(part,paint);
  return supportVisual(part,paint);
 }
+/** Map a typed socket onto the actual authored frame's surface. Structural
+ * positions remain normalized in the core for rules and save persistence;
+ * geometry is authoritative for visual contact and no centered "floating parts".
+ */
+export function physicalSocketPosition(socket,bounds){
+ const center=bounds.getCenter(new THREE.Vector3()),
+  [x,y,z]=socket.pos,role=socket.role;
+ const output=new THREE.Vector3(x,y,z);
+ if(socket.id==='mobility-bottom')return [0,bounds.min.y+.055,.02];
+ if(socket.id==='cab-top')return [0,bounds.max.y-.04,Math.min(0,center.z-.07)];
+ if(socket.id==='cab-front')return [0,center.y+.10,bounds.min.z+.06];
+ if(socket.id==='power-inner')return [0,center.y,center.z+.08];
+ if(role==='rear')return [x,Math.max(bounds.min.y+.18,y),bounds.max.z-.055];
+ if(role==='roof')return [x,bounds.max.y-.035,z];
+ if(role==='left'||role==='right'||role==='side')
+  return [Math.sign(x)*(Math.sign(x)>0?bounds.max.x-.05:-bounds.min.x+.05),
+   center.y+y,Math.min(center.z,z)];
+ return [x,y,z];
+}
+const actualBounds=group=>{
+ group.updateWorldMatrix(true,true);
+ return new THREE.Box3().setFromObject(group,true);
+};
+const definePosition=(mesh,x,y,z)=>{
+ mesh.position.set(x,y,z);
+};
+function materialMount(root,a,b,r=.11,name='MECHANICAL MOUNT'){
+ const from=new THREE.Vector3(...a),to=new THREE.Vector3(...b),
+  axis=to.clone().sub(from),length=axis.length();
+ if(length<.035)return;
+ const mount=new THREE.Mesh(new THREE.CylinderGeometry(r,r,length,10),JOINT);
+ mount.name=name;mount.position.copy(from.add(to).multiplyScalar(.5));
+ mount.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis.normalize());
+ root.add(mount);
+}
+/** Original joints are preserved; no size-normalizing stretches of detailed
+ * geometry. Frame elevation follows actual mobility height, not fixed 2.09.
+ */
 export function buildGrayboxScene(state,{socketVisible=false,highlightCategory=null,highlightPart=null}={}){
  const root=new THREE.Group(),sockets=[],objects=[];
- const frame=BY_PART.get(state.frame);
- const paint=state.paint;
- const frameColor={...paint,main:state.accentByAssembly.frame||paint.main};
- const body=visualFor('frame',frame,frameColor,state.armor.frame);
- body.position.y=2.09;root.add(body);objects.push({category:'frame',group:body});
+ const frame=BY_PART.get(state.frame),paint=state.paint,
+  frameColor={...paint,main:state.accentByAssembly.frame||paint.main};
+ const body=visualFor('frame',frame,frameColor,state.armor.frame),
+   frameBounds=actualBounds(body);
+ const mobMount=state.installed.mobility,
+  mobilityPart=BY_PART.get(mobMount?.id),
+  mobile=mobilityPart?visualFor('mobility',mobilityPart,{
+   ...paint,main:state.accentByAssembly.mobility||paint.main
+  },state.armor.mobility):null;
+ const mobilityBounds=mobile?actualBounds(mobile):null;
+ // Foot underside == 0; the lowest load-bearing frame interface overlaps
+ // the native mobility crown rather than sitting on a disconnected neck.
+ const height=mobilityBounds?mobilityBounds.max.y-mobilityBounds.min.y:1.57;
+ const frameY=height-.07-frameBounds.min.y;
+ body.position.y=frameY;root.add(body);
+ objects.push({category:'frame',group:body,source:body.userData.grayboxVisualSource||'graybox'});
  const allSockets=socketsForFrame(state.frame);
- for(const s of allSockets){
-  const p=[s.pos[0],s.pos[1]+2.09,s.pos[2]],matColor=mat('#9b9e8c',.13,.75);
-  if(socketVisible||highlightCategory===s.station){
-   const glyph=sphere(root,p,highlightCategory===s.station?.095:.055,
-     highlightCategory===s.station?mat('#c7a254',.15,.88):matColor,'socket-'+s.id);
-   glyph.userData.socket=s.id;sockets.push({mesh:glyph,socket:s});
+ const physical=new Map(allSockets.map(socket=>[
+  socket.id,physicalSocketPosition(socket,frameBounds)
+ ]));
+ for(const socket of allSockets){
+  const pos=physical.get(socket.id),world=[pos[0],pos[1]+frameY,pos[2]];
+  if(socketVisible||highlightCategory===socket.station){
+   const glyph=sphere(root,world,highlightCategory===socket.station?.095:.055,
+    highlightCategory===socket.station?mat('#d3a34b',.15,.90):
+      mat('#97a49a',.13,.76),'socket-'+socket.id);
+   glyph.userData.socket=socket.id;sockets.push({mesh:glyph,socket});
   }
  }
  const attached=[
-  ...Object.entries(state.installed).filter(([,mount])=>mount).map(([category,mount])=>({...mount,category})),
+  ...Object.entries(state.installed).filter(([,mount])=>mount)
+   .map(([category,mount])=>({...mount,category})),
   ...Object.entries(state.support).map(([socket,id])=>({category:'support',socket,id}))
  ];
  for(const mount of attached){
   const part=BY_PART.get(mount.id),socket=allSockets.find(s=>s.id===mount.socket);
   if(!part||!socket)continue;
-  const componentPaint={...paint,main:state.accentByAssembly[mount.socket]||
+  const finish={...paint,main:state.accentByAssembly[mount.socket]||
     state.accentByAssembly[mount.category]||paint.main};
-  const armor=state.armor[mount.category]||0;
-  const group=visualFor(mount.category,part,componentPaint,armor);
-  group.position.set(socket.pos[0],2.09+socket.pos[1],socket.pos[2]);
-  if(mount.category==='cab'){
-   group.position.y+=.18;
-   if(socket.id==='cab-front')group.position.z-=.19;
+  const armor=state.armor[mount.category]??0;
+  const group=mount.category==='mobility'?mobile:visualFor(mount.category,part,finish,armor);
+  if(!group)continue;
+  const bb=mount.category==='mobility'?mobilityBounds:actualBounds(group),
+   mid=bb.getCenter(new THREE.Vector3()),
+   pt=physical.get(socket.id);
+  let x=pt[0]-mid.x,y=frameY+pt[1]-mid.y,z=pt[2]-mid.z;
+  if(mount.category==='mobility'){
+   // Keep both actual shoes on the ground; allow the designed upper crown
+   // to overlap the load bridge instead of inventing a floating hip block.
+   x=-mid.x;y=-bb.min.y;z=-mid.z;
+  }else if(mount.category==='cab'&&socket.role==='roof'){
+   x=pt[0]-mid.x;y=frameY+pt[1]-bb.min.y-.045;z=pt[2]-mid.z;
+  }else if(mount.category==='cab'&&socket.role==='front'){
+   x=pt[0]-mid.x;y=frameY+pt[1]-mid.y;
+   z=pt[2]-bb.max.z+.065;
+  }else if(mount.category==='combat'&&(socket.role==='left'||socket.role==='right')){
+   const right=socket.role==='right';
+   x=pt[0]-(right?bb.min.x:bb.max.x)+(right?-.045:.045);
+   y=frameY+pt[1]-mid.y;
+   // Mount the real weapon's REAR receiver against the frame rather than
+   // leaving a long unsupported bore sticking out sideways.
+   z=pt[2]-bb.max.z+.11;
+  }else if(mount.category==='combat'&&socket.role==='roof'){
+   x=pt[0]-mid.x;y=frameY+pt[1]-bb.min.y+.025;z=pt[2]-bb.max.z+.06;
+  }else if(mount.category==='power'&&socket.role==='rear'){
+   x=pt[0]-mid.x;y=frameY+pt[1]-mid.y;z=pt[2]-bb.min.z-.06;
+  }else if(mount.category==='support'&&socket.role==='rear'){
+   x=pt[0]-mid.x;y=frameY+pt[1]-mid.y;z=pt[2]-bb.min.z-.04;
+  }else if(mount.category==='support'&&socket.role==='roof'){
+   x=pt[0]-mid.x;y=frameY+pt[1]-bb.min.y+.025;z=pt[2]-mid.z;
+  }else if(mount.category==='support'&&socket.role==='side'){
+   const right=pt[0]>0;
+   x=pt[0]-(right?bb.min.x:bb.max.x)+(right?-.05:.05);
+   y=frameY+pt[1]-bb.max.y*.30;z=pt[2]-mid.z;
   }
-  if(mount.category==='combat'){
-   if(socket.role==='roof')group.position.y+=.15;
-  }
-  // Every assembly inherits an authored attachment orientation, regardless
-  // of whether it is a weapon, utility pod, cockpit or power module.
-  group.rotation.set(...socket.rotation);
-  root.add(group);objects.push({category:mount.category,group,socket:mount.socket});
+  definePosition(group,x,y,z);
+  // No implicit "every rear gun turns backwards": assemblies preserve -Z
+  // forward, and authored socket orientation is applied only where relevant.
+  group.rotation.set(...(socket.rotation||[0,0,0]));
+  root.add(group);
+  objects.push({category:mount.category,group,socket:mount.socket,
+   source:group.userData.grayboxVisualSource||'graybox'});
  }
  return {root,sockets,objects};
 }
