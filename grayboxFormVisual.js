@@ -3,6 +3,7 @@
  */
 import * as THREE from 'three';
 import {fromId,HOUSINGS,CARRIERS,FEET} from './grayboxArchitecture.js';
+import {MOBILITY_LAYOUTS} from './mobilityDefinitions.js';
 const material=(color,metal=.27)=>{
  const mat=new THREE.MeshStandardMaterial({color,metalness:metal,roughness:.74,flatShading:true});
  mat.userData.grayboxOwned=true;return mat;
@@ -182,25 +183,41 @@ export function buildWeaponCarrier(id,weapon,paint,side=1){
  g.userData.terminalLocal=terminal.slice();
  return g;
 }
-export function buildFeetAccessory(id,mobilityBounds,paint){
+export function buildFeetAccessory(id,mobilityBounds,paint,mobilityId='legs-yard'){
  const g=new THREE.Group();
  if(id==='stock'||!fromId(FEET,id))return g;
- const b=mobilityBounds,d=b.getSize(new THREE.Vector3()),
-  steel=material(paint.secondary),shell=material(paint.main);
- const span=Math.min(.93,d.x*.29),ground=b.min.y+.085;
- for(const side of [-1,1]){
-  const x=side*span;
+ const b=mobilityBounds,steel=material(paint.secondary),shell=material(paint.main),
+  pivot=material('#67716b',.52);
+ const layout=MOBILITY_LAYOUTS[mobilityId];
+ const feet=layout?layout.legs.map(l=>({side:l.side,
+  foot:l.foot,ankle:l.ankle,size:layout.footSize})):
+  [-1,1].map(side=>({side,foot:[side*.64,b.min.y+.16,-.19],
+   ankle:[side*.64,b.min.y+.39,-.06],size:[.39,.15,.65]}));
+ for(const {side,foot,ankle,size} of feet){
+  const x=foot[0],z=foot[2],ground=b.min.y+.072;
+  // A bolted pad bolts UNDER the actual existing work boot. The ankle and
+  // original sole are never replaced by mysterious free-space toe cubes.
+  box(g,'foot kit mounting plate '+side,[x,ground+.035,z],
+   [size[0]*.85,.13,size[2]*.78],pivot);
+  cyl(g,'ankle-to-foot bracket '+side,
+   [ankle[0],ankle[1]-.05,ankle[2]],
+   [x,ground+.13,z+.12],.075,pivot);
   if(id==='skid'){
-   box(g,'wide detachable skid '+side,[x,ground,b.min.z+.11],
-    [.40,.13,.79],steel);
-   box(g,'skid upper retainer '+side,[x,ground+.115,b.min.z+.29],
-    [.23,.09,.32],shell);
+   box(g,'wide detachable skid '+side,[x,ground,z-.08],
+    [Math.max(.43,size[0]*1.08),.14,Math.max(.73,size[2]*1.08)],steel);
+   box(g,'skid upper retainer '+side,[x,ground+.135,z+.14],
+    [size[0]*.68,.095,.26],shell);
   }else{
+   const toeZ=z-size[2]*.44;
    for(const toe of [-1,1]){
+    const xx=x+toe*size[0]*.22;
     box(g,'split replaceable toe '+side+' / '+toe,
-      [x+toe*.125,ground,b.min.z-.05],[.135,.14,.48],steel);
+      [xx,ground,toeZ],[size[0]*.32,.13,size[2]*.47],steel);
+    cyl(g,'toe hinge bracket '+side+' '+toe,
+      [xx,ground+.115,z-size[2]*.19],
+      [xx,ground+.10,toeZ+size[2]*.18],.058,pivot);
    }
-   bearing(g,'claw toe hinge '+side,[x,ground+.07,b.min.z+.24],.10,shell);
+   bearing(g,'claw toe hinge '+side,[x,ground+.12,z-size[2]*.17],.10,shell);
   }
  }
  return g;
@@ -220,25 +237,35 @@ export function buildFrameRiser(frameBounds,drop,paint){
 /** Independent bolt-on limb shells, preserving actual shared mobility meshes.
  * Does not imply arbitrary left/right locomotion replacements in live gameplay.
  */
-export function buildIndependentLegPlating(limbPlating={},bounds,paint,overrides={}){
+export function buildIndependentLegPlating(limbPlating={},bounds,paint,overrides={},mobilityId='legs-yard'){
  const g=new THREE.Group(),b=bounds,d=b.getSize(new THREE.Vector3());
+ const layout=MOBILITY_LAYOUTS[mobilityId];
+ const v=p=>new THREE.Vector3(...p);
  for(const [side,sign] of [['left',-1],['right',1]]){
   const level=limbPlating[side]||0;if(!level)continue;
   const color=overrides['leg-'+side]||paint.main,
    shell=material(color),dark=material(paint.secondary,.42);
-  const x=sign*Math.min(d.x*.28,.82),z=b.min.z+d.z*.50;
-  // Two separate serviceable subassemblies: thigh and shin coverage.
-  box(g,side+' independent thigh armor',
-   [x,b.max.y-d.y*.28,z-.11],
-   [Math.max(.23,d.x*.15),Math.max(.21,d.y*.26),.23],shell);
-  box(g,side+' thigh bearing band',
-   [x,b.max.y-d.y*.45,z-.09],[.27,.10,.24],dark);
+  const l=layout?.legs.find(x=>x.side===sign);
+  const hip=l?.hip||[sign*.56,-.06,.04],
+   knee=l?.knee||[sign*.62,-.43,.22],
+   ankle=l?.ankle||[sign*.64,b.min.y+.44,-.08];
+  const plate=(name,start,end,width,depth)=>{
+   const a=v(start),z=v(end),delta=z.clone().sub(a),length=delta.length();
+   const cover=box(g,name,a.add(z).multiplyScalar(.5).toArray(),
+     [width,length*.73,depth],shell);
+   cover.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());
+   for(const loc of [start,end]){
+    bearing(g,side+' plate mounting clevis '+name,
+     [loc[0]+sign*.015,loc[1],loc[2]-.095],width*.25,dark);
+   }
+  };
+  const forward=p=>[p[0]+sign*.028,p[1],p[2]-.12];
+  const width=mobilityId==='legs-hauler'?.40:mobilityId==='legs-compact'?.19:.27;
+  plate(side+' independent thigh armor',forward(hip),forward(knee),width,.17);
   if(level>=2){
-   box(g,side+' independent shin armor',
-    [x,b.min.y+d.y*.33,z-.08],
-    [.28,Math.max(.24,d.y*.24),.26],shell);
-   box(g,side+' replaceable ankle cuff',
-    [x,b.min.y+d.y*.16,z-.08],[.30,.11,.30],dark);
+   plate(side+' independent shin armor',forward(knee),forward(ankle),width*.98,.21);
+   bearing(g,side+' replaceable ankle cuff',
+     [ankle[0],ankle[1],ankle[2]-.12],width*.36,dark);
   }
  }
  return g;
