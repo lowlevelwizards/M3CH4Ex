@@ -144,8 +144,12 @@ function showTree(){
       tray.append(p);
       const part=own(entry.serial),def=BY_ID.get(part?.definitionId);
       if(def?.assemblyRole==='anatomy'){
-        const select=button('INSTALL '+def.section.toUpperCase()+' · '+def.side.toUpperCase(),
-          ()=>doSectionAction(def.side,def.section,'attach',{variant:def.variant}));
+        const active=labSectionDetails(machine).find(x=>x.side===def.side)?.sections?.[def.section];
+        const replacing=def.section==='shin'&&active?.installed;
+        const select=button((replacing?'SWAP TO ':'INSTALL ')+
+          (def.variant==='rook'?'ROOK S2 ':def.section.toUpperCase()+' ')+
+          '· '+def.side.toUpperCase(),
+          ()=>doSectionAction(def.side,def.section,replacing?'swap':'attach',{variant:def.variant}));
         select.style.width='100%';select.style.marginBottom='5px';tray.append(select);
       }else if(def?.assemblyRole==='leg'){
         const select=button('REINSTALL '+def.side.toUpperCase()+' LEG',
@@ -221,7 +225,9 @@ function renderInspection(){
       ['Attached to',node.parentSerial||'ROOT'],
       ['Socket',node.parentSocket||'—'],
       ['Mount',def?.mountSize||'—'],
-      ['Mass',def?.id==='legs-yard'?'240 kg carriage + installed 500 kg legs':(def?def.massKg+' kg':'—')],
+      ['Mass',def?.id==='legs-yard'
+        ?'240 kg carriage + '+labInspection(machine).mobility.legs+' modular leg(s)'
+        :(def?def.massKg+' kg':'—')],
       ['Condition',own(node.serial)?Math.round((own(node.serial).condition||0)*100)+'%':'Structural adapter']
     ];
     data.forEach(([title,value])=>{
