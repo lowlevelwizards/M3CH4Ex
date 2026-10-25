@@ -130,7 +130,7 @@ try{
  await page.waitForTimeout(160);
  assert.deepEqual(errors,[],'Stage 15 isolated arm audit browser errors');
  await page.locator('[data-tab="reference"]').click();
- await page.getByRole('button',{name:/08 \\/ COMPACT SCOUT/}).click();
+ await page.getByRole('button',{name:/08 . COMPACT SCOUT/}).click();
  await page.waitForTimeout(110);
  assert.match(await page.locator('#assessment').innerText(),/Stubber is a compact biped/i);
  assert.deepEqual(errors,[],'Stage 15 mobile reference framing errors');
