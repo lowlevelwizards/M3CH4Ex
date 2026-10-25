@@ -13,13 +13,13 @@ const existing=(id,extra={})=>{
   source:'existing',...extra};
 };
 export const FRAMES=Object.freeze([
- {id:'frame-sr',name:'BRUISER / Broad Industrial',mass:1580,capacity:5100,
+ {id:'frame-sr',name:'BRUISER / Broad Industrial',mass:1580,capacity:5900,
   size:[2.04,1.20,1.42],shape:'broad',description:'Tall wide crossmembers with deep internal equipment bay and side trunnions'},
- {id:'frame-utility',name:'SKELETON / Open Utility',mass:1290,capacity:4120,
+ {id:'frame-utility',name:'SKELETON / Open Utility',mass:1290,capacity:4700,
   size:[1.68,1.24,1.28],shape:'open',description:'Tall exposed cage with dual shoulder rails and open engine bays'},
- {id:'frame-wedge',name:'CRADLE / Compact Tub',mass:1450,capacity:4850,
+ {id:'frame-wedge',name:'CRADLE / Compact Tub',mass:1450,capacity:5200,
   size:[1.42,.68,1.24],shape:'wedge',description:'Short understructure with forward and roof cab platforms'},
- {id:'frame-spire-gb',name:'SPAR / Tall Narrow',mass:1160,capacity:3900,
+ {id:'frame-spire-gb',name:'SPAR / Tall Narrow',mass:1160,capacity:4400,
   size:[1.20,1.46,1.14],shape:'tall',description:'Compact vertical carrier; slim weapon and sensor mounts'}
 ]);
 export const CABS=Object.freeze([
@@ -229,12 +229,12 @@ export const PAINTS=Object.freeze({
 const variants=[
  ['01 / YELLOW UTILITY','frame-utility','cab-utility','legs-compact','gun-short','power-air','combat-right',[['support-left','support-arm'],['support-roof','support-sensor']],'mustard','teal'],
  ['02 / GRAY GUNFIGHTER','frame-sr','cab-utility','legs-hauler','gun-rivet','power-forge','combat-left',[['support-right','support-arm'],['support-roof','support-ammo']],'slate','charcoal'],
- ['03 / CANOPY ASSAULT','frame-wedge','cab-armored','legs-compact','gun-scatter','power-dynamo','combat-right',[['support-left','support-shield']],'slate','mustard'],
+ ['03 / CANOPY ASSAULT','frame-wedge','cab-bubble-gb','mobility-low-gb','gun-scatter','power-dynamo','combat-right',[['support-left','support-shield']],'slate','mustard'],
  ['04 / ORANGE SERVICE','frame-utility','cab-cyclops','legs-yard','gun-short','power-dynamo','combat-right',[['support-left','support-arm'],['support-roof','support-light']],'safety','rust'],
- ['05 / ROUNDED INDUSTRIAL','frame-spire-gb','cab-bubble-gb','legs-yard','gun-scatter','power-dynamo','combat-top',[['support-right','support-sensor']],'mustard','charcoal'],
- ['06 / WALKING CANNON','frame-wedge','cab-armored','legs-hauler','gun-cannon','power-forge','combat-top',[['support-right','support-shield']],'cream','slate'],
+ ['05 / ROUNDED INDUSTRIAL','frame-spire-gb','cab-armored','legs-yard','gun-scatter','power-dynamo','combat-top',[['support-right','support-sensor']],'mustard','charcoal'],
+ ['06 / WALKING CANNON','frame-wedge','cab-armored','mobility-low-gb','gun-cannon','power-forge','combat-top',[['support-right','support-shield']],'cream','slate'],
  ['07 / MAINTENANCE WALKER','frame-sr','cab-cyclops','legs-yard','gun-short','power-dynamo','combat-right',[['support-left','support-arm'],['support-rear','support-cooler']],'cream','safety'],
- ['08 / COMPACT SCOUT','frame-spire-gb','cab-cyclops','legs-compact','gun-short','power-air','combat-right',[['support-right','support-sensor']],'white','rust'],
+ ['08 / COMPACT SCOUT','frame-wedge','cab-cyclops','mobility-low-gb','gun-short','power-air','combat-right',[['support-right','support-sensor']],'white','rust'],
  ['09 / SCRAPYARD DERBY','frame-sr','cab-armored','legs-yard','gun-rivet','power-forge','combat-left',[['support-right','support-shield'],['support-rear','support-ammo']],'slate','red'],
  ['10 / WORKING CLASS','frame-utility','cab-cyclops','legs-yard','gun-scatter','power-dynamo','combat-right',[['support-left','support-arm'],['support-roof','support-cooler']],'rust','cream']
 ];
@@ -261,6 +261,22 @@ export function recipe(index){
  s.armor=Object.fromEntries(['frame','cab','mobility','combat'].map((k,i)=>[k,coverage[i]]));
  s.paint.main=PAINTS[primary];s.paint.secondary=PAINTS[secondary];
  s.paint.accent=PAINTS.mustard;
+ // Reference *recipes* configure real reusable assembly categories, not
+ // custom geometry. Players can swap every selected element independently.
+ const forms=[
+  ['angular','short','low','claw'],
+  ['angular','heavy','normal','skid'],
+  ['none','heavy','low','claw'],
+  ['angular','short','normal','stock'],
+  ['rounded','direct','low','stock'],
+  ['none','offset','low','skid'],
+  ['angular','short','normal','skid'],
+  ['none','short','low','claw'],
+  ['drum','short','normal','stock'],
+  ['angular','heavy','normal','stock']
+ ][index];
+ s.form=normalizeForm(Object.fromEntries(
+  ['housing','carrier','stance','feet'].map((key,i)=>[key,forms[i]])));
  return s;
 }
 export function loadGraybox(input){
