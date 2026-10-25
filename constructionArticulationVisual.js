@@ -7,6 +7,7 @@ import {YARDWALKER_LAYOUT} from './mobilityDefinitions.js';
 import {rotatedY} from './assemblyGraph.js';
 import {ARTICULATION_SIDES,ARTICULATION_JOINTS,JOINT_LIMITS,ACTUATOR_SPEC,currentPose} from './constructionArticulation.js';
 import {installedDevice,deviceBinding} from './constructionMechanisms.js';
+import {mechanismJointDescriptors} from './constructionKinematics.js';
 
 const RAD=Math.PI/180;
 const up=new THREE.Vector3(0,1,0);
@@ -36,7 +37,8 @@ function originalRestMatrix(pose){
  * affects only descendant components, never the bearing housing itself.
  */
 export function calculateArticulatedMatrices(graph,poses,assembly){
-  const values=currentPose(assembly),cache=new Map();
+  const joints=new Map(mechanismJointDescriptors(assembly).map(x=>[x.serial,x]));
+  const cache=new Map();
   const visiting=new Set();
   function visit(serial){
     if(cache.has(serial))return cache.get(serial);
@@ -49,13 +51,11 @@ export function calculateArticulatedMatrices(graph,poses,assembly){
     if(parent){
       const upstream=visit(parent.serial);
       if(upstream)delta.copy(upstream.delta);
-      const def=BY_ID.get(parent.definitionId);
-      if(def?.assemblyRole==='anatomy'&&ARTICULATION_JOINTS.includes(def.section)){
-        const key=def.side+':'+def.section,angle=values[key]||0;
-        if(Math.abs(angle)>1e-8) {
-          const hinge=poses.get(parent.serial);
-          if(hinge)delta.multiply(hingeMatrix(hinge.position,angle,hinge.rotationQuarterTurns));
-        }
+      const joint=joints.get(parent.serial);
+      if(joint&&Math.abs(joint.angle)>1e-8){
+        const hinge=poses.get(parent.serial);
+        if(hinge)delta.multiply(hingeMatrix(hinge.position,joint.angle,
+          hinge.rotationQuarterTurns));
       }
     }
     const current=delta.clone().multiply(originalRestMatrix(rest));
