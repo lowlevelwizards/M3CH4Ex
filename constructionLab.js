@@ -15,7 +15,8 @@ import {
   createLabMachine, labInspection, labEquip, labSetGeneratorMount, labBlueprint,
   loadLabBlueprint, labNodeList, labLegAction, labLegDetails,
   labSectionAction, labSectionDetails, labStowed,
-  labJointAction,labPosePreset,labPose,LAB_SLOTS
+  labJointAction,labPosePreset,labPose,
+  labGrounding,labAssistedPreset,labGuidedWalkFrame,labReturnManual,LAB_SLOTS
 } from './constructionLabCore.js';
 
 const $=id=>document.getElementById(id);
@@ -26,7 +27,7 @@ const slotLabels={structure:'FRAME',mobility:'MOBILITY',power:'POWER',command:'C
 let machine=createLabMachine(), selectedSlot='structure', selectedSerial=machine.installed.structure;
 let selectedSocket=null;
 let currentTab='catalog', isolate=false, rayTargets=[], sockets=[],partRoots=new Map(), nodeWorldPoses=new Map();
-let actuators=[],poseAnimation=null,animationToken=0;
+let actuators=[],poseAnimation=null,animationToken=0,neutralGroupY=0;
 let clearance={warnings:[],status:'Not yet checked'};
 const viewMap={quarter:[2.42,.22],front:[Math.PI,.08],side:[Math.PI/2,.10],top:[Math.PI,1.47]};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -366,7 +367,7 @@ function jointControl(side,joint,container){
   container.append(card);
 }
 function updatePoseDiagnostics(){
-  const pose=labPose(machine);
+  const pose=labPose(machine),grounding=labGrounding(machine);
   document.querySelectorAll('[data-pose-value]').forEach(el=>{
     const key=el.dataset.poseValue;
     el.textContent=pose[key]+'°';
@@ -379,6 +380,19 @@ function updatePoseDiagnostics(){
   panel.replaceChildren();
   const report=articulationReport(machine);
   const headline=document.createElement('h2');headline.textContent='MECHANICAL STATUS';panel.append(headline);
+  const mode=document.createElement('p');mode.className='meta';
+  mode.textContent=grounding.mode==='grounded'
+    ?'ASSISTED · FOOT TARGETS / LIVE IK · body drop '+Math.round(grounding.bodyDropM*100)+' cm'
+    :'MANUAL · HINGE ANGLES (feet are not constrained)';
+  panel.append(mode);
+  if(grounding.mode==='grounded'){
+    for(const side of ARTICULATION_SIDES){
+      const item=grounding.feet[side],p=document.createElement('p');p.className='meta';
+      p.textContent=side.toUpperCase()+' CONTACT · '+(item.planted?'PLANTED':'SWING')+
+        ' · z '+item.z.toFixed(2)+' m · lift '+Math.round(item.y*100)+' cm';
+      panel.append(p);
+    }
+  }
   for(const item of report.stroke){
     const line=document.createElement('div');line.className='metric';
     const a=document.createElement('span'),b=document.createElement('strong');
@@ -400,25 +414,37 @@ function renderPosePanel(){
   if(!panel)return;
   panel.replaceChildren();
   const intro=document.createElement('section');intro.className='card';
-  const h=document.createElement('h2');h.textContent='POSE PRESETS';intro.append(h);
+  const h=document.createElement('h2');h.textContent='GROUNDED POSE · LIVE M3CH4 IK';intro.append(h);
+  const helper=document.createElement('p');helper.className='meta';
+  helper.textContent='Assisted poses target the feet and lower the body. Joint angles are solved from the installed mechanical anchors.';
+  intro.append(helper);
   const row=document.createElement('div');row.className='pose-presets';
-  const titles={neutral:'NEUTRAL',crouch:'CROUCH','step-left':'STEP L','step-right':'STEP R',asymmetric:'ASYMMETRIC'};
+  const titles={neutral:'NEUTRAL',crouch:'PLANTED CROUCH','step-left':'LIFT LEFT','step-right':'LIFT RIGHT',asymmetric:'WEIGHT SHIFT'};
   for(const preset of PRESET_NAMES){
     const b=button(titles[preset],()=>{
-      stopSweep(false);
-      const result=labPosePreset(machine,preset);
+      stopSweep(true);
+      const result=labAssistedPreset(machine,preset);
       if(!result.ok){setMessage(result.reason,true);return;}
       applyExplode();renderPosePanel();
-      setMessage('Mechanical pose · '+titles[preset]);
+      setMessage('Assisted · '+titles[preset]+' · live foot-target IK');
     });
     row.append(b);
   }
   intro.append(row);
-  const sweep=button(poseAnimation?'STOP MOTION TEST':'TEST BOTH KNEES THROUGH STROKE',()=>{
+  const walk=button(poseAnimation?'STOP TWO-STEP DEMO':'TEST PLANTED TWO-STEP MOTION',()=>{
     if(poseAnimation){stopSweep(true);return;}
-    startSweep();
+    startGuidedWalk();
   });
-  sweep.style.width='100%';sweep.style.marginTop='10px';intro.append(sweep);
+  walk.style.width='100%';walk.style.marginTop='10px';intro.append(walk);
+  const manual=button('MANUAL JOINT MODE · UNCONSTRAINED',()=>{
+    stopSweep(true);labReturnManual(machine);applyExplode();renderPosePanel();
+    setMessage('Manual joint inspection · foot placement not constrained');
+  });
+  manual.style.width='100%';manual.style.marginTop='8px';intro.append(manual);
+  const sweep=button('MANUAL TWO-KNEE HINGE SWEEP',()=>{
+    stopSweep(true);labReturnManual(machine);startSweep();
+  });
+  sweep.style.width='100%';sweep.style.marginTop='6px';intro.append(sweep);
   panel.append(intro);
   for(const side of ARTICULATION_SIDES){
     const group=document.createElement('section');group.className='card';
@@ -436,17 +462,50 @@ function stopSweep(restore=true){
   cancelAnimationFrame(prior.request);
   poseAnimation=null;animationToken++;
   if(restore){
-    for(const side of ARTICULATION_SIDES)
-      labJointAction(machine,side,'knee',prior.initial[side]);
+    if(prior.kind==='guided'){
+      machine.labPose=structuredClone(prior.before.pose);
+      machine.labGrounding=structuredClone(prior.before.grounding);
+      machine.labManualPose=structuredClone(prior.before.manualPose);
+    }else{
+      for(const side of ARTICULATION_SIDES)
+        labJointAction(machine,side,'knee',prior.initial[side]);
+    }
     applyExplode();
   }
   renderPosePanel();
+}
+function startGuidedWalk(){
+  if(poseAnimation||!labInspection(machine).mobility.complete)return;
+  const before={pose:labPose(machine),grounding:labGrounding(machine),
+    manualPose:structuredClone(machine.labManualPose||labPose(machine))};
+  const started=performance.now(),token=++animationToken;
+  poseAnimation={kind:'guided',request:0,before};
+  const tick=now=>{
+    if(!poseAnimation||token!==animationToken)return;
+    const t=Math.min(1,Math.max(0,(now-started)/3800));
+    const result=labGuidedWalkFrame(machine,t);
+    if(!result.ok){
+      stopSweep(true);setMessage('Step preview stopped: '+result.reason,true);return;
+    }
+    applyExplode();
+    if(t<1)poseAnimation.request=requestAnimationFrame(tick);
+    else{
+      const prior=poseAnimation;
+      poseAnimation=null;animationToken++;
+      machine.labPose=structuredClone(prior.before.pose);
+      machine.labGrounding=structuredClone(prior.before.grounding);
+      machine.labManualPose=structuredClone(prior.before.manualPose);
+      applyExplode();renderPosePanel();
+      setMessage('Planted two-step completed · original foot anchors and pose restored');
+    }
+  };
+  renderPosePanel();poseAnimation.request=requestAnimationFrame(tick);
 }
 function startSweep(){
   if(poseAnimation||!labInspection(machine).mobility.complete)return;
   const initial=Object.fromEntries(ARTICULATION_SIDES.map(side=>[side,labPose(machine)[side+':knee']]));
   const token=++animationToken,started=performance.now();
-  poseAnimation={initial,request:0};
+  poseAnimation={kind:'manual',initial,request:0};
   const tick=now=>{
     if(!poseAnimation||token!==animationToken)return;
     const elapsed=Math.max(0,now-started),duration=2600;
@@ -513,7 +572,7 @@ function clearGeometry(parent){
 }
 function buildModels(){
   clearGeometry(partGroup);clearGeometry(markerGroup);
-  partGroup.position.set(0,0,0);
+  partGroup.position.set(0,0,0);neutralGroupY=0;
   partRoots.clear();rayTargets=[];sockets=[];actuators=[];
   const inspection=labInspection(machine),graph=inspection.graph;
   const frame=own(graph.root),frameDef=BY_ID.get(frame?.definitionId);
@@ -577,6 +636,7 @@ function buildModels(){
   let bounds=new THREE.Box3().setFromObject(partGroup);
   if(!bounds.isEmpty()){
     partGroup.position.y-=bounds.min.y;
+    neutralGroupY=partGroup.position.y;
     bounds=new THREE.Box3().setFromObject(partGroup);
     // Keep existing frame coordinates; only shift the whole assembled machine.
   }
@@ -599,6 +659,9 @@ function buildModels(){
   return bounds;
 }
 function applyExplode(){
+  const grounding=labGrounding(machine);
+  partGroup.position.y=neutralGroupY-(grounding.mode==='grounded'?grounding.bodyDropM:0);
+  partGroup.position.z=grounding.mode==='grounded'?grounding.bodyTravelZM:0;
   const fraction=Number(explode.value)/100;
   const report=labInspection(machine),graph=report.graph;
   const cache=applyArticulatedModels(graph,nodeWorldPoses,machine,partRoots,fraction);
