@@ -227,7 +227,7 @@ export function physicalSocketPosition(socket,bounds){
  if(role==='rear')return [x,Math.max(bounds.min.y+.18,y),bounds.max.z-.055];
  if(role==='roof')return [x,bounds.max.y-.035,z];
  if(role==='left'||role==='right'||role==='side')
-  return [Math.sign(x)*(Math.sign(x)>0?bounds.max.x-.05:-bounds.min.x+.05),
+  return [x<0?bounds.min.x+.045:bounds.max.x-.045,
    center.y+y,Math.min(center.z,z)];
  return [x,y,z];
 }
