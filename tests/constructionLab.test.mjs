@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createLabMachine, labEquip, labInspection, labBlueprint, loadLabBlueprint,
-  labNodeList, labSetGeneratorMount, labLegAction, labLegDetails
+  labNodeList, labSetGeneratorMount, labLegAction, labLegDetails,
+  labSectionAction, labSectionDetails, labStowed
 } from '../constructionLabCore.js';
 
 test('default lab rig is an authentic, graph-valid five-station machine',()=>{
   const rig=createLabMachine();
   assert.equal(labInspection(rig).valid,true);
-  assert.equal(labNodeList(rig).filter(n=>!n.virtual).length,7); // five primary stations plus two owned legs
+  assert.equal(labNodeList(rig).filter(n=>!n.virtual).length,19); // five stations, two legs and twelve anatomical sections
 });
 test('catalogue swaps use actual definitions and maintain graph consistency',()=>{
   const rig=createLabMachine();
@@ -111,4 +112,106 @@ test('invalid leg swaps and unknown hip sides fail without mutating graph',()=>{
   assert.equal(labLegAction(rig,'rear','detach').ok,false);
   assert.equal(labLegAction(rig,'left','replace-shin').ok,false);
   assert.equal(JSON.stringify(labBlueprint(rig)),before);
+});
+
+test('Stage 07 stock limbs contain authored six-section component chains',()=>{
+  const rig=createLabMachine(),graph=labInspection(rig).graph;
+  const groups=labSectionDetails(rig);
+  assert.equal(groups.length,2);
+  for(const limb of groups){
+    assert.equal(limb.legInstalled,true);
+    const names=['hip','thigh','knee','shin','ankle','foot'];
+    let parent=limb.legSerial;
+    for(const name of names){
+      const section=limb.sections[name];
+      assert.equal(section.installed,true);
+      assert.equal(graph.nodes[section.serial].parentSerial,parent);
+      parent=section.serial;
+    }
+    assert.equal(limb.sections.shin.variant,'original');
+  }
+  assert.equal(labInspection(rig).mobility.complete,true);
+  assert.equal(labInspection(rig).valid,true);
+});
+test('Stage 07 shin swap keeps ankle and foot and changes mass by authored delta',()=>{
+  const rig=createLabMachine(),before=labInspection(rig).machineCheck.massKg;
+  const prior=labSectionDetails(rig)[0].sections;
+  const first=labSectionAction(rig,'left','shin','swap',{variant:'rook'});
+  assert.equal(first.ok,true,first.reason);
+  const current=labSectionDetails(rig)[0].sections;
+  assert.equal(current.shin.variant,'rook');
+  assert.equal(current.ankle.serial,prior.ankle.serial);
+  assert.equal(current.foot.serial,prior.foot.serial);
+  assert.notEqual(current.shin.serial,prior.shin.serial);
+  assert.equal(labInspection(rig).machineCheck.massKg,before-20);
+  assert.equal(labInspection(rig).ready,true);
+  assert.equal(labInspection(rig).valid,true);
+  assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'original'}).ok,true);
+  assert.equal(labInspection(rig).machineCheck.massKg,before);
+});
+test('Stage 07 supported shin cannot be removed as an orphan-only mutation',()=>{
+  const rig=createLabMachine();
+  const before=JSON.stringify(labBlueprint(rig));
+  const failed=labSectionAction(rig,'left','shin','detach');
+  assert.equal(failed.ok,false);
+  assert.match(failed.reason,/Supports 2 child assemblies/);
+  assert.equal(JSON.stringify(labBlueprint(rig)),before);
+  const removed=labSectionAction(rig,'left','shin','detach',{cascade:true});
+  assert.equal(removed.ok,true,removed.reason);
+  const left=labSectionDetails(rig)[0];
+  assert.equal(left.sections.shin.installed,false);
+  assert.equal(left.sections.ankle.installed,false);
+  assert.equal(left.sections.foot.installed,false);
+  assert.equal(labInspection(rig).valid,true);
+  assert.equal(labInspection(rig).ready,false);
+  assert.equal(labStowed(rig).some(x=>x.descendants===2),true);
+  const restored=labSectionAction(rig,'left','shin','attach',{variant:'original'});
+  assert.equal(restored.ok,true,restored.reason);
+  assert.equal(labSectionDetails(rig)[0].sections.foot.installed,true);
+  assert.equal(labInspection(rig).ready,true);
+});
+test('Stage 07 whole leg can be stowed with complete nested anatomy and restored',()=>{
+  const rig=createLabMachine();
+  assert.equal(labSectionAction(rig,'right','shin','swap',{variant:'rook'}).ok,true);
+  const before=labSectionDetails(rig)[1].sections;
+  assert.equal(labLegAction(rig,'right','detach').ok,true);
+  assert.equal(labInspection(rig).valid,true);
+  assert.equal(labLegAction(rig,'right','attach').ok,true);
+  const after=labSectionDetails(rig)[1].sections;
+  assert.equal(after.shin.variant,'rook');
+  assert.equal(after.shin.serial,before.shin.serial);
+  assert.equal(after.foot.serial,before.foot.serial);
+  assert.equal(labInspection(rig).ready,true);
+});
+test('Stage 07 module swaps and offset generator preserve shin configuration',()=>{
+  const rig=createLabMachine();
+  assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
+  assert.equal(labEquip(rig,'combat','gun-short').ok,true);
+  assert.equal(labSetGeneratorMount(rig,'offset').ok,true);
+  assert.equal(labSectionDetails(rig)[0].sections.shin.variant,'rook');
+  assert.equal(labInspection(rig).valid,true);
+});
+test('Stage 07 blueprint roundtrip preserves mixed shins and stowed supported branches',()=>{
+  const rig=createLabMachine();
+  assert.equal(labSectionAction(rig,'left','shin','swap',{variant:'rook'}).ok,true);
+  assert.equal(labSectionAction(rig,'right','shin','detach',{cascade:true}).ok,true);
+  const bp=labBlueprint(rig);
+  assert.equal(bp.version,3);
+  const saved=JSON.stringify(bp);
+  const restored=loadLabBlueprint(bp);
+  assert.equal(JSON.stringify(labBlueprint(restored)),saved);
+  assert.equal(labSectionDetails(restored)[0].sections.shin.variant,'rook');
+  assert.equal(labSectionDetails(restored)[1].sections.foot.installed,false);
+  assert.equal(labSectionAction(restored,'right','shin','attach',{variant:'original'}).ok,true);
+  assert.equal(labInspection(restored).ready,true);
+});
+test('Stage 07 rejects a wrong-side hip/socket and malformed stored inventory',()=>{
+  const rig=createLabMachine(),bp=labBlueprint(rig);
+  const corrupted=structuredClone(bp);
+  const left=corrupted.anatomy.nodes.find(n=>n.definitionId==='yard-shin-left');
+  left.parentSerial=corrupted.anatomy.nodes.find(n=>n.definitionId==='yard-knee-right').serial;
+  assert.throws(()=>loadLabBlueprint(corrupted));
+  const foreign=structuredClone(bp);
+  foreign.anatomy.stowed['bogus']=[{serial:'bogus',definitionId:'unknown'}];
+  assert.throws(()=>loadLabBlueprint(foreign));
 });
