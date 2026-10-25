@@ -142,6 +142,29 @@ export function refreshDeviceTarget(assembly,side){
  if(drive&&installedSection(assembly,side,'shin'))
   assembly.labMechanisms[side].targetSerial=installedSection(assembly,side,'shin').serial;
 }
+/** Reattach previously owned universal devices after temporarily lifting an
+ * entire leg, changing stations, or restoring a serviceable anatomical branch.
+ */
+export function reconnectDevices(assembly,side){
+ if(!LEG_SIDES.includes(side)||!assembly.labMechanisms?.[side])
+  return {ok:true,unchanged:true};
+ return mutate(assembly,()=>{
+  for(const type of ['bearing','actuator']){
+   const serial=assembly.labMechanisms[side][type];
+   if(!serial)continue;
+   const parent=parentFor(assembly,side,type);
+   if(!parent||assemblyGraph(assembly).nodes[serial])continue;
+   const owned=assembly.owned.find(p=>p.serial===serial);
+   if(!owned||BY_ID.get(owned.definitionId)?.device!==type)
+    throw Error('Stored mechanism serial is invalid');
+   const result=proposeAttachment(assembly,BY_ID,serial,parent.serial,socketFor(type));
+   if(!result.ok)throw Error(result.reason);
+   assembly.graph=result.graph;
+  }
+  refreshDeviceTarget(assembly,side);
+  return {side,restored:true};
+ });
+}
 export function installDefaultDevices(assembly){
  ensureDeviceInventory(assembly);
  for(const side of LEG_SIDES){
