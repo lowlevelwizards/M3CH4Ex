@@ -58,6 +58,34 @@ try{
  await page.getByRole('button',{name:/B-62/}).last().click();
  await page.waitForTimeout(150);
  assert.deepEqual(errors,[],'Bearing change browser errors');
+ // Stage 12 graybox is a separate workspace; verify full user-visible render.
+ await page.goto('http://127.0.0.1:'+port+'/graybox.html',{waitUntil:'load',timeout:30000});
+ await page.waitForTimeout(500);
+ const gray=await page.evaluate(()=>({
+  canvas:!!document.querySelector('#gb-viewport canvas'),
+  assessment:document.querySelector('#assessment')?.textContent,
+  cards:document.querySelectorAll('#choices .part-choice').length,
+  screen:document.querySelector('#gb-viewport')?.getBoundingClientRect().height
+ }));
+ console.log('GRAYBOX_BOOT',JSON.stringify(gray));
+ assert.deepEqual(errors,[],'New graybox startup browser errors');
+ assert.ok(gray.canvas,'Graybox has no WebGL preview');
+ assert.match(gray.assessment||'',/5 \/ 5 READY/);
+ assert.equal(gray.cards,4,'Expected four foundational frames');
+ assert.ok(gray.screen>140,'Graybox viewport must remain visible on mobile');
+ await page.locator('[data-tab="reference"]').click();
+ await page.getByRole('button',{name:/06 \/ WALKING CANNON/}).click();
+ await page.waitForTimeout(140);
+ assert.deepEqual(errors,[],'Reference recipe browser errors');
+ assert.match(await page.locator('#assessment').innerText(),/5 \/ 5/);
+ await page.locator('[data-tab="parts"]').click();
+ await page.getByRole('button',{name:'SUPPORT',exact:true}).click();
+ await page.getByRole('button',{name:/UTILITY ARM \/ Service Manipulator/i}).click();
+ const socketChoice=page.getByRole('button',{name:/LEFT AUXILIARY/i});
+ if(await socketChoice.count())await socketChoice.first().click();
+ await page.waitForTimeout(120);
+ assert.deepEqual(errors,[],'Socket-selection browser errors');
+ console.log('GRAYBOX_BROWSER_SMOKE_OK');
  console.log('BROWSER_SMOKE_OK');
 }finally{
  await page.close();await browser.close();
