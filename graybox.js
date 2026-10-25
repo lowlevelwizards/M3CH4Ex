@@ -7,7 +7,7 @@ import {FRAMES,CATALOG,BY_PART,PAINTS,RECIPES,defaultBuild,validSockets,
  loadGraybox,exportGraybox,socketsForFrame} from './grayboxCore.js';
 import {buildGrayboxScene} from './grayboxVisual.js';
 import {HOUSINGS,CARRIERS,STANCES,FEET,DEFAULT_FORM} from './grayboxArchitecture.js';
-import {setForm} from './grayboxCore.js';
+import {setForm,setLimbPlating} from './grayboxCore.js';
 const $=id=>document.getElementById(id);
 const STORAGE='m3ch4-graybox-v1';
 let model,activeCategory='frame',pending=null,socketVisible=false,paintTarget='all';
@@ -233,6 +233,21 @@ function renderAppearance(){
   });
   field.append(picker);root.append(field);
  }
+ const limbs=document.createElement('h3');limbs.textContent='INDEPENDENT LEG PLATING';
+ root.append(limbs);
+ for(const side of ['left','right']){
+  const line=document.createElement('div');line.className='armor-row';
+  const label=document.createElement('strong');label.textContent=side.toUpperCase()+' LEG';
+  line.append(label);
+  for(const [value,name] of [[0,'BARE'],[1,'THIGH'],[2,'FULL']]){
+   line.append(button(name,()=>{
+    const response=setLimbPlating(model,side,value);
+    if(!response.ok){status(response.reason,true);return;}
+    save();renderAppearance();refreshStage();buildAssessment();
+   },{active:(model.limbPlating?.[side]||0)===value}));
+  }
+  root.append(line);
+ }
  const h=document.createElement('h3');h.textContent='PROTECTIVE COVERAGE';
  root.append(h);
  for(const cat of ['frame','cab','mobility','combat']){
@@ -252,6 +267,7 @@ function renderAppearance(){
  const pick=document.createElement('select');
  const targets=[['all','Entire machine'],['frame','Frame'],
   ['cab','Cab'],['mobility','Mobility'],['combat','Combat'],['power','Power'],
+  ['leg-left','Left leg plates'],['leg-right','Right leg plates'],
   ...Object.keys(model.support).map(x=>[x,'Auxiliary / '+x])];
  for(const [id,title] of targets){
   const option=document.createElement('option');option.value=id;option.textContent=title;
