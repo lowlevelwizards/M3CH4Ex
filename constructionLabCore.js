@@ -12,6 +12,7 @@ import {
 } from './constructionLegs.js';
 import {
   ANATOMY_ORDER,anatomyId,sectionStatus,anatomyReadiness,rigAnatomyMass,
+  installedLimbGeometry,
   installDefaultAnatomy,detachAnatomyBranch,installAnatomyBranch,swapShin,
   detachWholeLeg,restoreWholeLeg,temporarilyStripLegs,reinstateLegs,partStowList,
   restoreAnatomyBlueprint
@@ -24,7 +25,7 @@ import {
   validateGrounding,solveGroundedRig,contactWalkFrame
 } from './constructionGroundedPose.js';
 
-export const LAB_BLUEPRINT_VERSION=5;
+export const LAB_BLUEPRINT_VERSION=6;
 export const LAB_SLOTS=Object.freeze([...SLOTS]);
 export const LAB_PARTS=Object.freeze([...BY_ID.values()]);
 export const DEFAULT_LAB_SELECTION=Object.freeze({slot:'structure',tab:'catalog'});
@@ -163,26 +164,95 @@ export function labPosePreset(assembly,name){
 }
 export function labPose(assembly){return currentPose(assembly);}
 export function labGrounding(assembly){return structuredClone(assembly.labGrounding||neutralGrounding());}
+/** A failed kinematic request is never silently clipped. When the user requests
+ * a preset the controller reports its attainable scaled travel explicitly.
+ * Its target remains an actual, shared world-space ankle reference.
+ */
+export function labSolveGrounded(assembly,targets){
+  return solveGroundedRig(targets,{upperLowerForSide:side=>installedLimbGeometry(assembly,side)});
+}
 export function labAssistedPreset(assembly,name){
   const snapshot=structuredClone(assembly);
   try{
     if(!yardLegSupported(assembly)||!anatomyReadiness(assembly))
       return {ok:false,reason:'Serviceable Yardwalker legs must be installed for grounded posing.'};
-    const targets=groundedTargets(name);
-    const result=applyGrounding(assembly,targets);
+    const requested=groundedTargets(name);
+    let chosen=null,solved=null,scale=1;
+    // Scale motion about grounded support anchors, NOT independently per foot.
+    // The requested values are shown to the player if reduced.
+    for(let i=0;i<=60;i++){
+      scale=1-i/60;
+      const g=structuredClone(requested);
+      g.bodyDropM=Math.round(requested.bodyDropM*scale*10000)/10000;
+      for(const side of LEG_SIDES){
+        g.feet[side].y=Math.round(requested.feet[side].y*scale*10000)/10000;
+        g.feet[side].z=Math.round(requested.feet[side].z*scale*10000)/10000;
+      }
+      solved=labSolveGrounded(assembly,g);
+      if(solved.ok){chosen=g;break;}
+    }
+    if(!chosen)throw Error('No grounded stance is reachable with the installed mechanical lengths and joint limits.');
+    const result=applyGrounding(assembly,chosen,
+      {upperLowerForSide:side=>installedLimbGeometry(assembly,side)});
     if(!result.ok)throw Error(result.reason);
-    return {ok:true,mode:'grounded',contacts:result.contacts};
+    return {ok:true,mode:'grounded',contacts:result.contacts,
+      requestedDropM:requested.bodyDropM,achievedDropM:chosen.bodyDropM,
+      movementScale:scale,limited:scale<.999};
   }catch(error){
     Object.keys(assembly).forEach(key=>delete assembly[key]);
     Object.assign(assembly,snapshot);
     return {ok:false,reason:error.message};
   }
 }
-export function labGuidedWalkFrame(assembly,phase){
+/** A single fixed stride envelope per build avoids changing the planted
+ * foot's target mid-step and therefore prevents adaptive foot sliding.
+ */
+export function labMotionEnvelope(assembly){
+  const mechanics=LEG_SIDES.map(side=>installedLimbGeometry(assembly,side));
+  const extra=Math.max(0,...mechanics.map(x=>x?.extraReachM||0));
+  const candidate={liftM:Math.max(.025,.10-extra*.46),
+    stepDistanceM:Math.max(.16,.25-extra*.35),
+    bodyDropM:Math.max(.02,.04-extra*.08)};
+  for(let scale=1;scale>=.35;scale-=.05){
+    const cfg={liftM:candidate.liftM*scale,
+      stepDistanceM:candidate.stepDistanceM*scale,bodyDropM:candidate.bodyDropM*scale};
+    let valid=true;
+    for(let i=0;i<=40;i++){
+      const report=labSolveGrounded(assembly,contactWalkFrame(i/40,cfg));
+      if(!report.ok){valid=false;break;}
+    }
+    if(valid)return {ok:true,...cfg,scale:Math.round(scale*100)/100};
+  }
+  return {ok:false,reason:'No continuous two-step envelope is compatible with installed joint limits.'};
+}
+export function labGuidedWalkFrame(assembly,phase,envelope=null){
   if(!Number.isFinite(phase))return {ok:false,reason:'Invalid step progress'};
   if(!yardLegSupported(assembly)||!anatomyReadiness(assembly))
     return {ok:false,reason:'Both serviceable legs required'};
-  return applyGrounding(assembly,contactWalkFrame(phase));
+  const fit=envelope||labMotionEnvelope(assembly);
+  if(!fit.ok)return fit;
+  return applyGrounding(assembly,contactWalkFrame(phase,fit),
+    {upperLowerForSide:side=>installedLimbGeometry(assembly,side)});
+}
+export function labViability(assembly){
+  const inspection=labInspection(assembly);
+  const connected=inspection.graphCheck.valid;
+  if(!yardLegSupported(assembly))
+    return {structure:connected,ground:false,reason:'Serviceable stance study requires Yardwalker',
+      clearance:'UNVERIFIED'};
+  if(!anatomyReadiness(assembly))
+    return {structure:connected,ground:false,reason:'A leg or a supported assembly is detached',
+      clearance:'UNVERIFIED'};
+  const stand=labSolveGrounded(assembly,groundedTargets('neutral'));
+  const crouch=labSolveGrounded(assembly,groundedTargets('crouch'));
+  const stride=labMotionEnvelope(assembly);
+  const legs=Object.fromEntries(LEG_SIDES.map(side=>[side,installedLimbGeometry(assembly,side)]));
+  return {structure:connected,ground:stand.ok,standReason:stand.reason||null,
+    fullCrouch:crouch.ok,crouchReason:crouch.reason||null,
+    walkPreview:stride.ok,walkReason:stride.reason||null,
+    stride:stride.ok?stride:null,legs,
+    clearance:'UNVERIFIED: broad-phase overlap hints only',
+    status:!stand.ok?'CANNOT STAND':crouch.ok?'GROUNDABLE':'LIMITED CROUCH'};
 }
 export function labReturnManual(assembly){return returnToManual(assembly);}
 export function labLegDetails(assembly){
@@ -215,7 +285,7 @@ export function labBlueprint(assembly){
     manualPose:structuredClone(assembly.labManualPose||currentPose(assembly))};
 }
 export function loadLabBlueprint(input){
-  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,LAB_BLUEPRINT_VERSION].includes(input.version)
+  if(!input||input.format!=='m3ch4-construction-lab'||![1,2,3,4,5,LAB_BLUEPRINT_VERSION].includes(input.version)
     ||!input.stations||typeof input.stations!=='object'
     ||Object.keys(input.stations).some(k=>!LAB_SLOTS.includes(k)))
       throw new Error('Unsupported or invalid lab blueprint.');
@@ -259,7 +329,7 @@ export function loadLabBlueprint(input){
       throw new Error([...validated.errors,...manual.errors].join('; '));
     machine.labManualPose={...input.manualPose};
     if(input.grounding.mode==='grounded'){
-      const computed=solveGroundedRig(input.grounding);
+      const computed=labSolveGrounded(machine,input.grounding);
       if(!computed.ok)throw new Error(computed.reason);
       for(const [key,value] of Object.entries(computed.pose))
         if(Math.abs(value-machine.labPose[key])>.003)
